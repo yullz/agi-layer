@@ -79,13 +79,19 @@ def score_final(
     w_relevance: float = 1.0,
     w_importance: float = 0.6,
     w_recency: float = 0.4,
+    w_rerank: float = 1.0,
 ) -> float:
-    """Blend relevance (post fusion/rerank), importance, and recency into one
+    """Blend relevance (fusion), rerank signal, importance, and recency into one
     comparable score used for budget packing. When retrieval feels off, this is
-    the first place to tune."""
+    the first place to tune.
+
+    A reranker persists its judgement by setting cand.rerank_score (0 when no
+    reranker ran), so a reranker's reordering is no longer silently overwritten
+    by this final re-sort."""
     rec = recency_weight(now - cand.created_at, half_life_days)
     return (
         w_relevance * cand.fused_score
+        + w_rerank * cand.rerank_score
         + w_importance * cand.importance
         + w_recency * rec
     )

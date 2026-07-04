@@ -69,4 +69,13 @@ class WritePipeline:
           4. Record any demonstrated workflow/preference to the procedural
              store so it can be replayed when the task recurs.
         """
-        raise NotImplementedError("Implement extract + reconcile; see ARCHITECTURE.md (Write path)")
+        # Hybrid write: hand the exchange to the semantic store (Mem0), which
+        # does extraction + dedup/supersede internally — the reconcile-on-write
+        # the naive path skips. Graph/procedural updates land in a later phase.
+        # Best-effort: a failure here must not lose the appended raw episode.
+        try:
+            add_turn = getattr(self.semantic, "add_turn", None)
+            if callable(add_turn):
+                add_turn(turn.user_input, turn.assistant_reply, scope=turn.scope)
+        except Exception:
+            pass

@@ -5,9 +5,10 @@ injected inward, so the modules stay decoupled and swappable. As you implement
 the stubs, only this file needs to know which concrete stores/models you picked;
 the wiring shape stays the same.
 
-Note: running this now will raise NotImplementedError from the first store that
-gets constructed — that's expected. Implement the stubs (build order in the
-README) and the same wiring comes to life.
+As of Phase 1 (hybrid memory) this boots: it wires the real SQLite episodic
+store, a Mem0-backed semantic store (which degrades gracefully if Mem0 isn't
+configured), and an offline echo model, so the turn loop runs with no API key.
+Set a frontier key or start a local Ollama model to enable real generation.
 """
 from __future__ import annotations
 
@@ -39,8 +40,8 @@ def build():
 
     # --- Models ---
     embedder = Embedder("your-embedding-model")
-    reranker = Reranker("your-cross-encoder")
-    registry = ModelRegistry({}, FrontierModel, LocalModel)
+    reranker = Reranker()  # lazy cross-encoder; identity passthrough if absent
+    registry = ModelRegistry(cfg.models_config, FrontierModel, LocalModel)
 
     # --- Stores ---
     episodic = EpisodicStore(cfg.episodic_db)
@@ -52,6 +53,7 @@ def build():
     write_pipeline = WritePipeline(episodic=episodic, semantic=semantic, graph=graph)
     consolidator = Consolidator(
         episodic=episodic, semantic=semantic, graph=graph,
+        summarizer=registry.get(registry.default_name("private")),
         half_life_days=cfg.recency_half_life_days,
     )
 
@@ -67,7 +69,7 @@ def build():
     policy = Policy()
     orchestrator = Orchestrator(
         memory=memory,
-        router=Router(registry, policy),
+        router=Router(registry, policy, sensitive_scopes=cfg.sensitive_scopes),
         context_builder=ContextBuilder(),
         skills=Skills(),
         feedback=Feedback(),

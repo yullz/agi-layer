@@ -1,11 +1,49 @@
-"""Configuration — loaded from env + config/models.yaml."""
+"""Configuration — filesystem paths, tuning knobs, and the model registry config.
+
+Paths and knobs come from dataclass defaults. The model registry is loaded from
+config/models.yaml so adding/swapping a backend is a config change, not a code
+change. Loading is defensive: if the file or PyYAML is missing, a built-in
+default (the offline echo backend) keeps the layer bootable.
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
+MODELS_YAML = ROOT / "config" / "models.yaml"
+
+
+# Minimal built-in fallback so the layer boots even without models.yaml/PyYAML.
+_DEFAULT_MODELS_CONFIG = {
+    "models": [
+        {"name": "echo", "adapter": "echo", "context_window": 8000,
+         "capabilities": [], "privacy": "local", "cost": "free"},
+    ],
+    "defaults": {
+        "hard_reasoning": "echo", "general": "echo",
+        "private": "echo", "fallback": "echo",
+    },
+}
+
+
+def _load_models_config(path: Path) -> dict:
+    """Parse models.yaml, falling back to the built-in default if the file or
+    PyYAML is unavailable — the system always has at least the echo backend and
+    never fails to boot on config alone."""
+    try:
+        import yaml  # optional dependency
+    except Exception:
+        return dict(_DEFAULT_MODELS_CONFIG)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return dict(_DEFAULT_MODELS_CONFIG)
+    cfg.setdefault("models", [])
+    cfg.setdefault("defaults", {})
+    return cfg
 
 
 @dataclass
@@ -23,9 +61,17 @@ class Settings:
     # Consolidation schedule (cron). Default: 3am daily.
     consolidation_cron: str = "0 3 * * *"
 
+    # Scopes whose turns must never leave the machine (router forces a local
+    # model). Scopes containing private/sensitive/health/finance/etc. are also
+    # treated as sensitive by convention.
+    sensitive_scopes: tuple = ()
+
+    # Model registry, parsed from config/models.yaml (see _load_models_config).
+    models_config: dict = field(default_factory=dict)
+
     @classmethod
     def load(cls) -> "Settings":
-        s = cls()
+        s = cls(models_config=_load_models_config(MODELS_YAML))
         for p in (s.data_dir, s.vector_dir, s.graph_dir):
             p.mkdir(parents=True, exist_ok=True)
         return s

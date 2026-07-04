@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 
 from memory import retrieval
-from memory.schema import ContextBundle, Turn
+from memory.schema import ContextBundle, Source, Turn
 
 
 class MemoryStore:
@@ -64,6 +64,10 @@ class MemoryStore:
         # Reinforce what we actually used: bump importance / access stats so
         # frequently-useful memories resist decay (the other half of forgetting).
         for cand in bundle.items:
+            # Only VECTOR candidates map to semantic MemoryItem ids; keyword/
+            # graph/recency ref_ids are Episode ids and don't belong here.
+            if cand.source != Source.VECTOR:
+                continue
             try:
                 self.semantic.touch(cand.ref_id)
             except Exception:

@@ -11,7 +11,10 @@ pyyaml
 # Local models (Ollama is the easiest start; vLLM for throughput)
 ollama
 
-# Vector store — pick ONE:
+# Hybrid memory engine — extraction + dedup + vector search behind MemoryStore
+mem0ai
+
+# Vector store (used by Mem0, or directly if you roll your own) — pick ONE:
 chromadb
 # sqlite-vec        # zero-infra, can live in your episodic .db file
 # lancedb           # columnar, good when memory gets large

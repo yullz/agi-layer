@@ -37,16 +37,18 @@ Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
   memory, **search / fetch / browse the web** — including JS-rendered pages and
   **interactive** click/fill/login via headless Chromium, run a command) to
   actually get things done — including a **perceive-act loop** (`browse_agent`)
-  that observes a page, decides, clicks, and repeats toward a goal. Write / exec
-  / interactive tools are gated (confirm required) and every call is audited;
+  that observes a page (text + accessibility tree, and screenshots for vision
+  models), decides, clicks, and repeats toward a goal. Write / exec / interactive
+  tools are gated (confirm required) and every call is audited;
   **routines** (`:automate` / `:run`, plus **`:starters`** for ready-made ones)
   save tasks and run them unattended, fail-closed — and can run **on a schedule**
   (`:schedule morning at 08:00`).
-- **Reads your real world.** Local-first **connectors** (`:connectors`) let the
-  agent read your **git** repo (log / status), **calendar** (`.ics` file or URL),
-  and **email** (`mbox`) — plus networked, config-gated **GitHub** (commits) and
-  **IMAP** (headers). Read-only and unattended, so routines can use them (a
-  briefing that checks your calendar and repo).
+- **Reads *and acts on* your real world.** Local-first **connectors**
+  (`:connectors`) read your **git** repo (log / status), **calendar** (`.ics`
+  file or URL), and **email** (`mbox`), plus networked, config-gated **GitHub**
+  (commits / issues / PRs) and **IMAP** (headers) — all read-only and unattended.
+  And it can **act**, each gated: open a **GitHub issue**, add a **calendar
+  event**, **send email** (SMTP).
 - **Improves under governance.** Feedback → a routing optimizer (GEPA-ready),
   gated by fail-closed guardrails, snapshot/rollback, and an audit log.
 - **Is a bridge.** Exposes `ask` / `retrieve_memory` / `remember` over **MCP** so

@@ -662,6 +662,175 @@ def main() -> int:
     check("browse_agent omitted without a pilot",
           _bdt(None, allow_web=True).get("browse_agent") is None)
 
+    # 26) connector write actions — calendar / github / email, all gated (Phase 16)
+    print("\n26) connector write actions")
+    wics = os.path.join(tmp, "write.ics")
+    when = time.strftime("%Y-%m-%d %H:%M", time.gmtime(time.time() + 3600))
+    check("calendar_add_event writes an event",
+          conn.calendar_add_event(wics, "Standup", when, duration_min=30).startswith("added"))
+    check("added event is readable back", "Standup" in conn.calendar_upcoming(wics, days=7))
+    blk = conn._ics_event_block("u", "T", 0, 60)
+    check("event block is well-formed", "BEGIN:VEVENT" in blk and "SUMMARY:T" in blk)
+    check("calendar write refuses a URL target",
+          "URL" in conn.calendar_add_event("https://x/cal.ics", "T", when))
+
+    url, headers, data = conn._build_github_issue_request("o/r", "Bug", "desc", "tok")
+    check("github issue request is a correct POST payload",
+          url.endswith("/repos/o/r/issues") and headers.get("Authorization") == "Bearer tok"
+          and b'"title": "Bug"' in data)
+    check("create-issue needs a token",
+          "github_token" in conn.github_create_issue("o/r", "T", "", token=None))
+    check("issues/PRs parse from JSON",
+          conn._parse_github_items('[{"number":7,"title":"X","user":{"login":"al"}}]')
+          == [(7, "X", "al")])
+    check("issue list skips PR entries",
+          conn._parse_github_items('[{"number":7,"title":"X","pull_request":{}}]',
+                                   issues_only=True) == [])
+
+    emsg = conn._build_email("me@x", "you@y", "Hi", "body")
+    check("email MIME builds correct headers + body",
+          emsg["From"] == "me@x" and emsg["To"] == "you@y" and emsg["Subject"] == "Hi"
+          and emsg.get_payload(decode=True) == b"body")
+    check("smtp send is config-gated",
+          "not configured" in conn.smtp_send("", "", "", "to", "s", "b"))
+
+    wtools = _bdt(None, allow_web=False, connectors={
+        "github_repo": "a/b", "calendar_file": wics,
+        "smtp_host": "h", "smtp_user": "u", "smtp_password": "p"})
+    specs = {s["name"]: s for s in wtools.specs()}
+    check("read connectors are unattended",
+          specs["github_issues"]["unattended"] and specs["github_prs"]["unattended"])
+    check("write connectors are gated",
+          not specs["calendar_add_event"]["unattended"]
+          and not specs["github_create_issue"]["unattended"]
+          and not specs["email_send"]["unattended"])
+    check("email_send present only when smtp configured",
+          "email_send" not in _bdt(None, allow_web=False,
+                                   connectors={"github_repo": "a/b"}).names())
+    wagent = Agent(_ScriptRouter(
+        ['{"tool": "calendar_add_event", "args": {"title": "X", "start": "2030-01-01 09:00"}}',
+         '{"final": "no"}']), wtools)
+    wres = wagent.run("add an event", confirm=None)
+    check("write connector denied without confirmation",
+          any(s["tool"] == "calendar_add_event" and "denied" in str(s["result"])
+              for s in wres["steps"]))
+
+    # 27) richer browser perception — accessibility + vision plumbing (Phase 16)
+    print("\n27) richer browser perception")
+    from core.browser_agent import (BrowserPilot as _BP, _build_messages,
+                                    _flatten_ax, _format_observation)
+    ax = {"role": "WebArea", "name": "Home", "children": [
+        {"role": "button", "name": "Login", "children": []},
+        {"role": "generic", "name": "", "children": [
+            {"role": "textbox", "name": "Email"}]}]}
+    flat = _flatten_ax(ax)
+    check("accessibility tree flattens to role/name lines",
+          'button "Login"' in flat and 'textbox "Email"' in flat
+          and not any("generic" in x for x in flat))
+    obs = _format_observation("http://x", "hello", ["A button Login"], flat)
+    check("observation includes url, accessibility, elements",
+          "URL: http://x" in obs and "ACCESSIBILITY" in obs and "ELEMENTS" in obs)
+    tmsgs = _build_messages("goal", "obs", [], "SHOT", supports_vision=False)
+    vmsgs = _build_messages("goal", "obs", [], "SHOT", supports_vision=True)
+    check("non-vision model gets text-only messages", isinstance(tmsgs[1]["content"], str))
+    check("vision model gets a multimodal message with the image",
+          isinstance(vmsgs[1]["content"], list)
+          and any(p.get("type") == "image_url"
+                  and str(p.get("image_url", {}).get("url", "")).startswith("data:image/png;base64,")
+                  for p in vmsgs[1]["content"]))
+
+    class _ShotSession:
+        def __init__(self):
+            self.shots = 0
+
+        def observe(self):
+            return "URL: x\nTEXT: t"
+
+        def screenshot(self):
+            self.shots += 1
+            return "B64"
+
+        def act(self, a):
+            return "ok"
+
+        def close(self):
+            pass
+
+    class _VisionRouter(_ScriptRouter):
+        class _M:
+            supports_vision = True
+
+        def pick(self, q, c, scope=None):
+            return _VisionRouter._M()
+
+    ss = _ShotSession()
+    r1 = _BP(_ScriptRouter(['{"done": "ok"}'])).run("https://x.test", "g", session=ss)
+    check("pilot skips screenshots for a non-vision model", r1["answer"] == "ok" and ss.shots == 0)
+    ss2 = _ShotSession()
+    _BP(_VisionRouter(['{"done": "ok"}'])).run("https://x.test", "g", session=ss2)
+    check("pilot captures a screenshot for a vision model", ss2.shots >= 1)
+
+    # 28) Phase 16 adversarial-review hardening
+    print("\n28) review hardening (SSRF, calendar, github, coverage)")
+    from core.tools import _GuardedRedirect, _do_action
+
+    class _FakePage:
+        def __init__(self):
+            self.went = []
+
+        def goto(self, url, **k):
+            self.went.append(url)
+
+    fp = _FakePage()
+    blocked = False
+    try:
+        _do_action(fp, {"verb": "goto", "target": "http://169.254.169.254/", "value": ""}, [])
+    except Exception:
+        blocked = True
+    check("in-session goto blocks private/metadata targets", blocked and fp.went == [])
+    fp2 = _FakePage()
+    _do_action(fp2, {"verb": "goto", "target": "https://example.com/", "value": ""}, [])
+    check("in-session goto allows public targets", fp2.went == ["https://example.com/"])
+    rblocked = False
+    try:
+        _GuardedRedirect().redirect_request(None, None, 302, "m", {}, "http://127.0.0.1/")
+    except Exception:
+        rblocked = True
+    check("a redirect to a private host is blocked", rblocked)
+
+    check("github page size clamps to <=100",
+          conn._gh_page_size(500) == 100 and conn._gh_page_size(5) == 5)
+    check("issue filter keeps real (non-PR) issues",
+          conn._parse_github_items(
+              '[{"number":5,"title":"real","user":{"login":"me"}},'
+              '{"number":7,"title":"pr","pull_request":{"url":"x"}}]',
+              issues_only=True) == [(5, "real", "me")])
+
+    cr_ics = os.path.join(tmp, "cr.ics")
+    conn.calendar_add_event(cr_ics, "Sync\r\nRoom", when)
+    check("carriage-return title round-trips without data loss",
+          "Sync Room" in conn.calendar_upcoming(cr_ics, days=7))
+    with open(cr_ics, encoding="utf-8", newline="") as f:   # newline="" -> no CRLF translation
+        raw = f.read()
+    check("written calendar has a VCALENDAR envelope + CRLF endings",
+          "BEGIN:VCALENDAR" in raw and "END:VCALENDAR" in raw and "\r\n" in raw)
+    empty_ics = os.path.join(tmp, "empty.ics")
+    open(empty_ics, "w").close()
+    conn.calendar_add_event(empty_ics, "Solo", when)
+    with open(empty_ics, encoding="utf-8") as f:
+        eraw = f.read()
+    check("event added to an empty file gets a VCALENDAR wrapper",
+          "BEGIN:VCALENDAR" in eraw and "END:VCALENDAR" in eraw and "Solo" in eraw)
+    again = conn.calendar_add_event(empty_ics, "Solo", when)
+    with open(empty_ics, encoding="utf-8") as f:
+        final = f.read()
+    check("calendar add is idempotent (no duplicate event)",
+          "already" in again and final.count("BEGIN:VEVENT") == 1)
+
+    big = {"role": "list", "name": "L",
+           "children": [{"role": "button", "name": str(i)} for i in range(100)]}
+    check("flatten_ax respects its node limit", len(_flatten_ax(big, limit=10)) == 10)
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

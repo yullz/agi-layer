@@ -1010,6 +1010,60 @@ def main() -> int:
     check("telegram bridge advances offset + no re-processing",
           br._offset == 4 and br.poll_once() == 0)
 
+    # 33) voice I/O — speak tool + speech-to-text + hands-free loop (Phase 22)
+    print("\n33) voice input + speak tool")
+    from core.listen import Listener
+    from core.voice import Speaker as _Spk
+    from core.voice_loop import VoiceLoop
+    sp_tools = _bdt(None, allow_web=False, speaker=_Spk())
+    check("speak tool registered + unattended (routine-usable)",
+          sp_tools.get("speak") is not None and sp_tools.get("speak").unattended)
+    check("speak tool returns a string, degrades with no engine",
+          isinstance(sp_tools.get("speak").run({"text": "hello"}), str))
+    check("speak(force) attempts even when voice is off (no crash)",
+          _Spk(enabled=False).speak("hi", force=True) in (True, False))
+    check("listener degrades cleanly when STT/mic is unavailable",
+          isinstance(Listener().available(), bool) and Listener().listen() is None)
+
+    class _FakeListener:
+        def __init__(self, phrases):
+            self._p = list(phrases)
+
+        def available(self):
+            return True
+
+        def listen(self):
+            return self._p.pop(0) if self._p else None
+
+    class _FakeSpeaker:
+        def __init__(self):
+            self.said = []
+
+        def speak(self, text, force=False):
+            self.said.append((text, force))
+            return True
+
+    class _VLOrch:
+        def __init__(self):
+            self.turns = []
+
+        def handle_turn(self, text, session, confirm=None):
+            self.turns.append(text)
+            return f"heard:{text}"
+
+    fl = _FakeListener(["what's my name", "stop listening", ""])
+    fsp, vlo = _FakeSpeaker(), _VLOrch()
+    vl = VoiceLoop(vlo, fl, fsp)
+    h1, r1 = vl.once()
+    check("voice loop transcribes, answers, and speaks the reply",
+          h1 == "what's my name" and r1 == "heard:what's my name"
+          and vlo.turns == ["what's my name"] and fsp.said and fsp.said[0][1] is True)
+    h2, r2 = vl.once()
+    check("voice loop stops on a stop phrase",
+          h2 == "__stop__" and vlo.turns == ["what's my name"])
+    h3, r3 = vl.once()
+    check("voice loop ignores empty input", h3 is None and r3 is None)
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

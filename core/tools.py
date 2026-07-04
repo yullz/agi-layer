@@ -359,9 +359,15 @@ def _browse_do(args):
         return f"(error: {e})"
 
 
+def _speak(speaker, text):
+    spoke = speaker.speak(str(text), force=True)
+    return "spoke" if spoke else "(no voice engine available on this machine)"
+
+
 def build_default_tools(memory=None, allow_web: bool = True,
                         connectors: dict | None = None,
-                        browser_pilot=None, notify_config: dict | None = None) -> ToolRegistry:
+                        browser_pilot=None, notify_config: dict | None = None,
+                        speaker=None) -> ToolRegistry:
     reg = ToolRegistry()
     reg.add(Tool("now", "Get the current date and time.",
                  lambda a: time.strftime("%Y-%m-%d %H:%M"), unattended=True))
@@ -452,6 +458,12 @@ def build_default_tools(memory=None, allow_web: bool = True,
                                                 connectors.get("smtp_from"),
                                                 port=int(connectors.get("smtp_port") or 587)),
                          params={"to": "str", "subject": "str", "body": "str"}, unattended=False))
+    if speaker is not None:
+        # Local audio output only — safe and unattended, so a routine can read
+        # a briefing aloud at your desk.
+        reg.add(Tool("speak", "Read text aloud on the user's machine (local text-to-speech).",
+                     lambda a: _speak(speaker, a.get("text", "")),
+                     params={"text": "str"}, unattended=True))
     if notify_config is not None:
         from core import notify as _notify
         if _notify.channel(notify_config) is not None:

@@ -22,6 +22,7 @@ from improvement.optimizer import Optimizer
 from core.agent import Agent
 from core.browser_agent import BrowserPilot
 from core.context_builder import ContextBuilder
+from core.listen import Listener
 from core.onboarding import Onboarding
 from core.orchestrator import Orchestrator
 from core.policy import Policy
@@ -30,6 +31,7 @@ from core.router import Router
 from core.routines import Routines
 from core.session import Session
 from core.tools import build_default_tools
+from core.voice import Speaker
 from improvement.feedback import Feedback
 from improvement.skills import Skills
 from interfaces.cli import run_repl
@@ -126,12 +128,18 @@ def build():
                      "telegram_token": cfg.telegram_token,
                      "telegram_chat_id": cfg.telegram_chat_id,
                      "pushover_token": cfg.pushover_token, "pushover_user": cfg.pushover_user}
+    # Voice I/O: one shared Speaker (replies + the `speak` tool) and a Listener
+    # (speech-to-text). Both degrade to no-ops when no engine/mic is present.
+    speaker = Speaker(enabled=cfg.voice_enabled)
     tools = build_default_tools(memory, allow_web=cfg.allow_web, connectors=connectors,
-                                browser_pilot=pilot, notify_config=notify_config)
+                                browser_pilot=pilot, notify_config=notify_config,
+                                speaker=speaker)
     orchestrator.tools = tools
     orchestrator.connectors = connectors
     orchestrator.notify_config = notify_config
     orchestrator.voice_enabled = cfg.voice_enabled
+    orchestrator.speaker = speaker
+    orchestrator.listener = Listener()
     orchestrator.agent = Agent(router, tools, audit=audit)
     # Timezone from config, else derived from the onboarding location answer, so
     # daily routines fire at the user's local wall-clock.
@@ -167,6 +175,9 @@ def main():
         elif iface == "telegram":
             from interfaces.telegram import serve_telegram
             serve_telegram(orchestrator, cfg)
+        elif iface == "voice":
+            from interfaces.voice import serve_voice
+            serve_voice(orchestrator)
         else:
             run_repl(orchestrator, Session())
     finally:

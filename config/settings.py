@@ -117,6 +117,9 @@ class Settings:
 
     # Voice — speak replies aloud via a local TTS engine (CLI). Off by default.
     voice_enabled: bool = False
+    # Wake word for the hands-free voice interface (AGI_INTERFACE=voice). Myro
+    # only acts after he hears this. Set empty to listen continuously (no wake).
+    wake_word: str = "Myro"
 
     # Reach your phone: a Telegram bridge (text Myro anywhere) + push
     # notifications (ntfy self-hostable / Telegram / Pushover). Credentials via
@@ -144,6 +147,7 @@ class Settings:
         _ov("user_name", "AGI_USER_NAME")
         _ov("timezone", "AGI_TIMEZONE")
         _ov("voice_enabled", "AGI_VOICE", lambda v: v.strip().lower() in ("1", "on", "true", "yes"))
+        _ov("wake_word", "AGI_WAKE_WORD")
         _ov("telegram_token", "AGI_TELEGRAM_TOKEN")
         _ov("telegram_chat_id", "AGI_TELEGRAM_CHAT_ID")
         _ov("ntfy_topic", "AGI_NTFY_TOPIC")

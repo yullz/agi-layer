@@ -6,10 +6,10 @@ install and exits cleanly. The loop itself lives in core/voice_loop.py.
 """
 from __future__ import annotations
 
-from core.voice_loop import VoiceLoop
+from core.voice_loop import VoiceLoop, WakeLoop
 
 
-def serve_voice(orchestrator) -> None:
+def serve_voice(orchestrator, cfg=None) -> None:
     listener = getattr(orchestrator, "listener", None)
     speaker = getattr(orchestrator, "speaker", None)
     name = getattr(getattr(orchestrator, "context_builder", None), "assistant_name", "Myro")
@@ -19,10 +19,16 @@ def serve_voice(orchestrator) -> None:
         return
     if speaker is not None:
         speaker.enabled = True
-    print(f"{name} is listening — just talk. Say 'stop listening' to end.")
 
     def _echo(heard, reply):
         print(f"you (voice)> {heard}")
         print(f"{name}> {reply}")
 
-    VoiceLoop(orchestrator, listener, speaker).run(on_turn=_echo)
+    wake = getattr(cfg, "wake_word", "Myro") if cfg is not None else "Myro"
+    if wake:
+        print(f"{name} is listening for '{wake}'. Say e.g. \"{wake}, what's my "
+              f"schedule?\"  ·  say 'stop listening' to end.")
+        WakeLoop(orchestrator, listener, speaker, wake=wake).run(on_turn=_echo)
+    else:
+        print(f"{name} is listening — just talk. Say 'stop listening' to end.")
+        VoiceLoop(orchestrator, listener, speaker).run(on_turn=_echo)

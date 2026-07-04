@@ -119,12 +119,15 @@ def parse_working_hours(text):
     for word, span in _HOUR_WORDS.items():
         if re.search(r"\b" + word + r"\b", s):
             return span
-    if re.search(r"\b9\s*(?:to|-|–)\s*5\b", s):
-        return ("09:00", "17:00")
     toks = [t for t in re.findall(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", s) if t[0]]
     if len(toks) >= 2:
         start, end = _to_hm(toks[0]), _to_hm(toks[1])
         if start and end:
+            sh, eh = int(start[:2]), int(end[:2])
+            # "9 to 6" / "9-5" almost always means 9am-6pm: if the end has no
+            # am/pm and lands before the start, treat it as the afternoon.
+            if not toks[1][2] and eh < sh:
+                end = f"{min(eh + 12, 23):02d}:{end[3:]}"
             return (start, end)
     return None
 

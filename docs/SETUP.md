@@ -1,74 +1,205 @@
-# Setup — turning on real intelligence
+# Setting up Myro — a friendly guide
 
-agi-layer runs offline out of the box (echo model + hashing embeddings). Each
-step below switches on a real capability. Do them in any order.
+Myro is your personal AI that runs on **your own computer**. This guide gets you
+from zero to talking to him. No prior experience needed — copy, paste, done.
 
-## 0. Install & run
+**The good news:** Myro runs out of the box with **nothing installed** beyond the
+basics. Everything else (a smarter brain, voice, your phone) is optional and you
+can add it whenever you like.
 
-```bash
-python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\Activate.ps1
-pip install -e .           # core only; add extras below
-python main.py             # REPL; :seed then :memory; :help for commands
-python tests/smoke.py      # 42 offline checks
-```
+---
 
-## 1. Claude on your Pro/Max subscription (default, no API credits)
+## Step 1 — Install Python (one time)
 
-```bash
-pip install -e ".[subscription]"     # claude-agent-sdk
-claude login                          # OAuth — draws from your plan, not credits
-```
-The router now prefers Claude for hard/general (non-sensitive) queries. Verify:
-`:status` shows a claude model, and replies tag `[via claude-...]`. Rate-limited
-by your plan; heavy automated volume can hit caps.
-
-*Prefer pay-per-token API instead?* `pip install -e ".[frontier]"`, set
-`ANTHROPIC_API_KEY`, and uncomment the `claude-api` entry in `config/models.yaml`.
-
-## 2. Local model (private scopes + always-on fallback)
+Myro needs **Python 3.11 or newer**. Check if you already have it:
 
 ```bash
-# install Ollama (https://ollama.com), then:
-ollama pull qwen3:14b            # generation + fact extraction (fits a 16GB GPU)
-ollama pull nomic-embed-text     # optional: embeddings via Ollama
+python --version        # Windows might use:  py --version
 ```
-`qwen-local` becomes reachable automatically. Sensitive scopes (see below) route
-here, never to Claude.
 
-## 3. Real embeddings (much better recall than the offline fallback)
+If it says 3.11 or higher, you're set. If not, install it from
+**https://python.org/downloads** (tick *"Add Python to PATH"* on Windows).
+
+## Step 2 — Get Myro running
+
+In a terminal (Command Prompt / PowerShell on Windows, Terminal on Mac/Linux),
+go to the `agi-layer` folder, then:
 
 ```bash
-pip install -e ".[rerank]"       # sentence-transformers: all-MiniLM + cross-encoder
-```
-The native store uses real embeddings + a reranker when present. (Switching
-embedders self-heals: mismatched-dimension rows are ignored, not compared as
-garbage — re-write or re-seed to repopulate.)
+# 1) create a private workspace for Myro's dependencies
+python -m venv .venv
 
-## 4. Privacy — sensitive scopes stay on-box
+# 2) turn it on
+source .venv/bin/activate        # Windows: .venv\Scripts\Activate.ps1
 
-Any scope whose name contains `private/health/finance/legal/hr/...` (or is listed
-in `Settings.sensitive_scopes`) is treated as sensitive: it's forced to a local
-model, and its memory is never packed into a prompt bound for a cloud model.
-Write secrets under such a scope:
+# 3) install Myro
+pip install -e .
 
-```
-:scope health-private
-I take 10mg of X daily.
+# 4) start him
+python main.py
 ```
 
-## 5. Other backends / interfaces
+That's it. The first time, **Myro introduces himself and asks you ~13 quick
+questions** to get to know you (press Enter to skip any, or type `stop`). After
+that you're at the `you>` prompt — just talk to him.
 
-| Want | Install | How |
-|---|---|---|
-| Hybrid Mem0 semantic store | `.[mem0]` | set `Settings.semantic_backend = "mem0"` |
-| GEPA prompt optimization | `.[dspy]` | used by `improvement/gepa_optimizer.py` |
-| Nightly consolidation (cron) | `.[schedule]` | APScheduler; stdlib timer otherwise |
-| HTTP API | `.[serve]` | `AGI_INTERFACE=api python main.py` → localhost:8765 |
-| MCP bridge (share with other agents) | `.[serve]` | `AGI_INTERFACE=mcp python main.py` |
+> Out of the box he uses a tiny built-in "echo" brain so everything runs with
+> zero setup. To make him genuinely smart, do **Step 4**.
 
-## 6. Config
+Type `:help` any time to see what he can do, and `exit` to leave.
 
-Edit `config/settings.py` (or wire env): `embedding_model`, `user_name` (greets
-you by name), `sensitive_scopes`, `semantic_backend`, retrieval budget/half-life.
-Models live in `config/models.yaml`. Env vars: `AGI_INTERFACE`, `AGI_LOG_LEVEL`,
-`AGI_DEBUG` (see `.env.example`).
+## Step 3 — Check everything's healthy (optional)
+
+```bash
+python tests/smoke.py        # should print "All 169 checks PASS"
+```
+
+If that passes, your install is good.
+
+---
+
+## Step 4 — Give Myro a real brain (pick one, or both)
+
+**Option A — Claude on your subscription (recommended, best quality).**
+Uses your Claude Pro/Max plan, not pay-per-use credits.
+
+```bash
+pip install -e ".[subscription]"
+claude login            # opens your browser to sign in
+```
+Restart Myro. `:status` should show a `claude` model, and his replies tag
+`[via claude-…]`.
+
+**Option B — A local model (fully private, works offline).**
+Runs entirely on your machine — great for a private setup or no internet.
+
+```bash
+# install Ollama first from https://ollama.com, then:
+ollama pull qwen3:14b        # fits a 16GB GPU like an RTX 4070
+```
+Restart Myro; he'll use it automatically. Anything you mark **private** always
+goes to this local model, never the cloud.
+
+**Sharper memory (optional but nice):**
+```bash
+pip install -e ".[rerank]"   # real embeddings — much better recall
+```
+
+---
+
+## Step 5 — Optional superpowers
+
+Add any of these whenever you want. Each is independent.
+
+### 🌐 Browse the web (including logins & JavaScript pages)
+```bash
+pip install -e ".[browser]"
+playwright install chromium
+```
+Now: *"search the web for…"*, *"browse this page and summarize it"*.
+
+### 🔊 Let Myro speak, and 🎤 talk to him
+```bash
+pip install -e ".[voice,voice-input]"
+pip install openai-whisper           # local speech-to-text (private)
+# you also need a microphone library for your OS, e.g.:  pip install pyaudio
+```
+- `:voice on` — he reads his replies aloud.
+- `:listen` — talk one message at a time.
+- **Hands-free with a wake word:**
+  ```bash
+  AGI_INTERFACE=voice python main.py
+  ```
+  Then just say **"Hey Myro, what's on my calendar?"** He waits for his name, does
+  it, speaks the answer, and waits again. Say **"stop listening"** to end.
+  (Change the wake word with `AGI_WAKE_WORD=Jarvis`.)
+
+### 📱 Reach your phone (notifications + text him from anywhere)
+Most private option is **ntfy** (free app, self-hostable):
+```bash
+export AGI_NTFY_TOPIC=myro-<make-up-something-random>
+```
+Install the **ntfy** app on your phone and subscribe to that same topic. Now
+routines can push to you — try:
+```
+:starters
+:schedule phone_briefing at workstart     # a morning briefing on your phone
+```
+
+**Text Myro from anywhere** with a Telegram bot:
+1. In Telegram, message **@BotFather**, send `/newbot`, follow the prompts, copy the token.
+2. Message your new bot once, then run this and note your chat id (the number under `"chat":{"id":…}`):
+   ```bash
+   AGI_TELEGRAM_TOKEN=your-token python main.py     # then in another terminal, or just set both below
+   ```
+3. Start the bridge:
+   ```bash
+   AGI_INTERFACE=telegram AGI_TELEGRAM_TOKEN=your-token AGI_TELEGRAM_CHAT_ID=your-id python main.py
+   ```
+Now you can text your bot from your phone and Myro replies. (He only answers
+*your* chat, and won't do anything destructive over text without you at the
+keyboard.)
+
+> Note: for phone features, your computer needs to be **on and running Myro**
+> while you're away.
+
+---
+
+## Step 6 — Settings & secrets (env vars)
+
+You never have to edit code. Set these in your terminal (or a `.env` file) before
+starting Myro:
+
+| Setting | What it does |
+|---|---|
+| `AGI_ASSISTANT_NAME` | rename him (default `Myro`) |
+| `AGI_USER_NAME` | so he greets you by name |
+| `AGI_TIMEZONE` | your timezone (e.g. `Europe/Berlin`) for scheduling |
+| `AGI_VOICE=on` | speak replies by default |
+| `AGI_WAKE_WORD` | the hands-free wake word (default `Myro`) |
+| `AGI_NTFY_TOPIC` | phone notifications via ntfy |
+| `AGI_TELEGRAM_TOKEN` / `AGI_TELEGRAM_CHAT_ID` | text him via Telegram |
+| `AGI_GITHUB_TOKEN` | let him read private repos / open issues |
+| `AGI_INTERFACE` | `cli` (default) · `voice` · `telegram` · `api` · `mcp` |
+
+Myro also derives your timezone and working hours from the onboarding questions,
+so `:schedule … at workstart` lines up with your real day. See them with
+`:profile`.
+
+---
+
+## Everyday commands
+
+```
+just type normally     ask a question, or ask him to do something
+:do <task>             force him to use his tools
+:memory                what he remembers  ·  :why <topic>  where it came from
+:remember <fact>       tell him something to keep
+:ingest <path>         learn from a file or folder
+:connectors            status of git / calendar / email / github
+:starters              install ready-made routines
+:automate n = task     save a routine  ·  :schedule n at 08:00  ·  :run n
+:voice on  ·  :listen  speak replies · talk to him
+:profile               your name / timezone / working hours
+:help                  the full list
+```
+
+---
+
+## Troubleshooting
+
+- **"command not found: python"** → try `py` (Windows) or `python3` (Mac/Linux).
+- **Replies are short/robotic** → you're on the built-in echo brain; do **Step 4**.
+- **Voice says "no engine"** → install `pyttsx3` (`pip install pyttsx3`) or your OS
+  voice; for input install `openai-whisper` + a mic library.
+- **Nothing happens on the wake word** → speak clearly and include his name
+  (*"Hey Myro, …"*); make sure your mic works and Whisper/Vosk is installed.
+- **Start fresh** → your data lives in the `data/` folder; delete it to reset
+  (this erases his memory).
+
+## Where your stuff lives — and privacy
+
+Everything Myro knows is in the **`data/`** folder on your machine. Nothing leaves
+your computer unless *you* turn on a cloud brain or a phone channel. Private
+scopes always stay local, and Myro asks before anything that sends or changes
+something.

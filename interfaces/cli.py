@@ -12,7 +12,9 @@ from memory.schema import Role, Source
 def run_repl(orchestrator, session) -> None:
     proactive = Proactive(orchestrator.memory)
     name = _assistant_name(orchestrator)
-    speaker = Speaker(enabled=getattr(orchestrator, "voice_enabled", False))
+    speaker = (getattr(orchestrator, "speaker", None)
+               or Speaker(enabled=getattr(orchestrator, "voice_enabled", False)))
+    listener = getattr(orchestrator, "listener", None)
     onboarding = getattr(orchestrator, "onboarding", None)
     n = _memory_count(orchestrator)
     print(f"\n  {name} — your personal intelligence layer")
@@ -70,6 +72,23 @@ def run_repl(orchestrator, session) -> None:
                           "install pyttsx3 (pip install pyttsx3) or espeak.")
                 else:
                     print(f"Voice is {'on' if state else 'off'}.")
+                continue
+            if line == ":listen":
+                if listener is None or not listener.available():
+                    print("Voice input isn't available — install SpeechRecognition + a "
+                          "local STT engine (whisper or vosk) and a microphone.")
+                    continue
+                print("🎤 listening… (speak now)")
+                heard = listener.listen()
+                if not heard:
+                    print("(didn't catch that)")
+                    continue
+                print(f"you (voice)> {heard}")
+                reply = orchestrator.handle_turn(heard, session, confirm=_cli_confirm)
+                for s in getattr(orchestrator, "last_steps", None) or []:
+                    print(f"  · {s['tool']}({_fmt_args(s['args'])}) → {_short(s['result'])}")
+                print(f"layer> {reply}")
+                speaker.speak(reply, force=True)
                 continue
             if line in (":briefing", ":brief"):
                 facts = proactive.briefing(session.active_scope)
@@ -312,6 +331,7 @@ _HELP = (
     "  :good / :bad          rate my last reply\n"
     "  :optimize             improve my routing from your feedback\n"
     "  :voice on / off       speak my replies aloud (local TTS)\n"
+    "  :listen               talk to me — capture one spoken message (local STT)\n"
     "  :status / :about      status / what this is\n"
     "  exit / quit           leave\n"
     "Otherwise just talk to me — ask a question or ask me to do something, and\n"

@@ -27,8 +27,10 @@ class Speaker:
         self.enabled = (not self.enabled) if on is None else bool(on)
         return self.enabled
 
-    def speak(self, text: str) -> bool:
-        if not self.enabled or not text:
+    def speak(self, text: str, force: bool = False) -> bool:
+        """Speak `text` if voice is enabled (or force=True, for the `speak`
+        tool / voice replies). Returns True if it actually spoke."""
+        if not text or not (self.enabled or force):
             return False
         backend = self._detect()
         if backend is None:

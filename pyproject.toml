@@ -22,6 +22,8 @@ serve = ["fastapi", "uvicorn", "mcp"]    # HTTP API + MCP bridge interfaces
 schedule = ["apscheduler"]               # cron-accurate consolidation scheduler
 browser = ["playwright>=1.40"]           # real JS-rendered pages for the `browse` tool
 voice = ["pyttsx3"]                       # local text-to-speech for :voice (else OS TTS)
+voice-input = ["SpeechRecognition"]       # speech-to-text for :listen (+ a mic backend
+                                          # like pyaudio, and openai-whisper or vosk)
 dev = ["pytest", "ruff", "mypy"]
 
 [project.scripts]

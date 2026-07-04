@@ -1198,6 +1198,65 @@ def main() -> int:
           all(k in _all for k in ("serve", "browser", "voice", "backup",
                                   "schedule", "subscription")))
 
+    # brain preference: keep everyday chat on the local model, or auto-route.
+    from core import brain as _brn
+    from core.policy import Policy as _Pol
+    from core.router import Router as _Rtr
+
+    class _BM:
+        def __init__(self, local): self.is_local = local
+
+    class _BReg:
+        def __init__(self, models, defaults): self._m = models; self._d = defaults
+        def default_name(self, intent): return self._d.get(intent)
+        def get(self, n): return self._m.get(n)
+        def names(self): return list(self._m)
+        def fallback(self): return self._m.get("echo")
+
+    _reg = _BReg({"loc": _BM(True), "cloud": _BM(False), "echo": _BM(True)},
+                 {"private": "loc", "general": "cloud", "hard_reasoning": "cloud", "fallback": "echo"})
+    _pol = _Pol()
+    check("brain prefer-local pins general+hard_reasoning to a local model",
+          _brn.apply_preference(_pol, _reg, True)
+          and _pol.routing_rules.get("general") == "loc"
+          and _pol.routing_rules.get("hard_reasoning") == "loc")
+    check("brain is_local_preferred reflects the pinned rule",
+          _brn.is_local_preferred(_pol, _reg))
+    _brn.apply_preference(_pol, _reg, False)
+    check("brain auto clears the local pin",
+          "general" not in _pol.routing_rules and not _brn.is_local_preferred(_pol, _reg))
+    _pol2 = _Pol()
+    _reg2 = _BReg({"cloud": _BM(False)}, {"general": "cloud", "hard_reasoning": "cloud"})
+    check("brain prefer-local no-ops gracefully when no local model exists",
+          _brn.apply_preference(_pol2, _reg2, True) is False and "general" not in _pol2.routing_rules)
+    _bd = os.path.join(tmp, "brainpref"); os.makedirs(_bd, exist_ok=True)
+    _brn.save_pref(_bd, True)
+    check("brain preference persists + reloads",
+          _brn.load_pref(_bd) is True and _brn.load_pref(os.path.join(tmp, "nope")) is None)
+
+    os.environ["AGI_PREFER_LOCAL"] = "1"
+    try:
+        from config.settings import Settings as _Set
+        check("AGI_PREFER_LOCAL env is honored by Settings", _Set.load().prefer_local is True)
+    finally:
+        os.environ.pop("AGI_PREFER_LOCAL", None)
+
+    # web app path: the Settings toggle switches brains and reports the active one.
+    class _BrainOrch:
+        def __init__(self, reg):
+            self.policy = _Pol(); self.router = _Rtr(reg, self.policy)
+            self.data_dir = os.path.join(tmp, "brainweb")
+            self.context_builder = ContextBuilder(); self.onboarding = None
+    _bwa = WebApp(_BrainOrch(_BReg(
+        {"loc": _BM(True), "cloud": _BM(False), "echo": _BM(True)},
+        {"private": "loc", "general": "cloud", "hard_reasoning": "cloud", "fallback": "echo"})))
+    _rl = _bwa.set_brain("local")
+    check("web set_brain local switches to a local brain",
+          _rl["ok"] and _rl["mode"] == "local" and _rl["local"])
+    _ra = _bwa.set_brain("auto")
+    check("web set_brain auto returns to cloud routing",
+          _ra["mode"] == "auto" and not _ra["local"])
+
     # 36) backups — snapshot everything you built (Phase 25)
     print("\n36) backups")
     import tarfile as _tf

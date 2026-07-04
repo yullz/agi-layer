@@ -141,6 +141,10 @@ class Settings:
 
     # Model registry, parsed from config/models.yaml (see _load_models_config).
     models_config: dict = field(default_factory=dict)
+    # Brain preference: keep everyday chat on the on-box (local) model even when a
+    # cloud brain is configured — private + free. Seeds the first run; the web app
+    # toggle (persisted in data/brain.json) governs after that. AGI_PREFER_LOCAL.
+    prefer_local: bool = False
 
     @classmethod
     def load(cls) -> "Settings":
@@ -155,6 +159,7 @@ class Settings:
         _ov("user_name", "AGI_USER_NAME")
         _ov("timezone", "AGI_TIMEZONE")
         _ov("voice_enabled", "AGI_VOICE", lambda v: v.strip().lower() in ("1", "on", "true", "yes"))
+        _ov("prefer_local", "AGI_PREFER_LOCAL", lambda v: v.strip().lower() in ("1", "on", "true", "yes"))
         _ov("wake_word", "AGI_WAKE_WORD")
         _ov("backup_dir", "AGI_BACKUP_DIR")
         _ov("backup_git_dir", "AGI_BACKUP_GIT_DIR")

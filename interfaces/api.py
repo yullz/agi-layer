@@ -58,6 +58,9 @@ def build_app(orchestrator, store=None):
     class SidIn(BaseModel):
         sid: str = "default"
 
+    class BrainIn(BaseModel):
+        mode: str
+
     # --- the app page ---
     @app.get("/")
     def index():
@@ -76,6 +79,10 @@ def build_app(orchestrator, store=None):
     @app.get("/api/status")
     def status(sid: str = "default"):
         return web.status(sid)
+
+    @app.post("/api/brain")
+    def brain_set(body: BrainIn):
+        return web.set_brain(body.mode)
 
     @app.get("/api/memory")
     def memory_get(q: str = "", scope: str | None = None, sid: str = "default"):

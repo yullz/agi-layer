@@ -1369,6 +1369,42 @@ def main() -> int:
     check("web attach: files are saved under data/uploads",
           bool(_glob.glob(os.path.join(tmp, "att_txt_d", "uploads", "*notes.txt"))))
 
+    # auto-route: an attached image switches this turn to a reachable vision model
+    # even when the picked model is text-only.
+    class _VisM:
+        is_local = True; model_name = "vis"; supports_vision = True
+        def available(self): return True
+
+    class _TxtM:
+        is_local = True; model_name = "txt"; supports_vision = False
+        def available(self): return True
+
+    class _MiniReg:
+        def __init__(self, m): self._m = m
+        def names(self): return list(self._m)
+        def get(self, n): return self._m.get(n)
+
+    class _AutoRouter:
+        def __init__(self):
+            self._txt = _TxtM(); self._vis = _VisM()
+            self.registry = _MiniReg({"txt": self._txt, "vis": self._vis}); self.seen = []
+        def pick(self, q, c, scope=None): return self._txt
+        def _is_sensitive(self, scope): return False
+        def generate(self, model, prompt, tools=None):
+            self.seen.append((model, prompt)); return model, "ok"
+
+    _ar = _AutoRouter()
+    WebApp(_caporch(_ar, "auto")).chat(
+        "what is this",
+        attachments=[{"name": "c.png", "mime": "image/png", "kind": "image",
+                      "content": "data:image/png;base64,QUJD"}])
+    check("web attach: an image auto-routes to a vision model (Auto mode)",
+          any(getattr(mdl, "supports_vision", False)
+              and any(_iof(m.get("content")) for m in pr if isinstance(m, dict))
+              for mdl, pr in _ar.seen))
+    check("brain labels the local vision model",
+          "vision" in _brn.label_for("vision-local").lower())
+
     # 36) backups — snapshot everything you built (Phase 25)
     print("\n36) backups")
     import tarfile as _tf

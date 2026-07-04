@@ -25,6 +25,7 @@ DEFAULT_EFFORT = "balanced"
 # Friendly labels for the picker; unknown model names fall back to themselves.
 _LABELS = {
     "qwen-local": "Local · private & free",
+    "vision-local": "Local vision · sees images",
     "claude-opus": "Claude Opus · deepest",
     "claude-sonnet": "Claude Sonnet · fast",
     "echo": "Offline (echo)",

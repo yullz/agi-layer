@@ -77,7 +77,7 @@ class WebApp:
                 if not ob.is_done() and sid not in self._onb_seen:
                     return self._onb_start(sess, sid, ob, rerun=False)
 
-        aug_text, images = self._ingest_attachments(text, attachments)
+        aug_text, images = self._ingest_attachments(text, attachments, sess.active_scope)
         confirm = (lambda *_a: True) if allow_actions else None
         try:
             reply = self.orch.handle_turn(aug_text, sess, confirm=confirm, images=images)
@@ -99,21 +99,27 @@ class WebApp:
         return None
 
     # --- attachments (files + images) ---------------------------------------
-    def _vision_available(self, text) -> bool:
+    def _vision_available(self, text, scope=None) -> bool:
+        """True if this turn can see an image — either a reachable vision model
+        that handle_turn will auto-route to, or the currently-picked model."""
         try:
-            m = self.orch.router.pick(text or " ", None)
-            return bool(getattr(m, "supports_vision", False))
+            if self.orch._pick_vision_model(scope) is not None:
+                return True
+        except Exception:
+            pass
+        try:
+            return bool(getattr(self.orch.router.pick(text or " ", None), "supports_vision", False))
         except Exception:
             return False
 
-    def _ingest_attachments(self, text, attachments):
+    def _ingest_attachments(self, text, attachments, scope=None):
         """Fold attachments into the turn: text/document files become prompt
         context (any model can read them); images are passed to a vision model if
         one is active, else noted. Everything is saved under data/uploads/ so the
         file tools can reach it later. Returns (augmented_text, images|None)."""
         if not attachments:
             return text, None
-        vision = self._vision_available(text)
+        vision = self._vision_available(text, scope)
         updir = self._uploads_dir()
         extras, images = [], []
         for i, a in enumerate(attachments):

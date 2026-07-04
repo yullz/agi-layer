@@ -58,6 +58,27 @@ If that passes, your install is good.
 
 ---
 
+## ⭐ Use Myro as an app (no terminal)
+
+Prefer a real chat window instead of the terminal? Myro has a clean browser app.
+
+```bash
+pip install -e ".[serve]"        # one-time
+python main.py                    # from the Myro folder — with AGI_INTERFACE=api set
+```
+…or, easiest of all, **double-click `Myro.bat`** (Windows) / run `./myro.sh`
+(Mac/Linux). Your browser opens to Myro's chat app automatically.
+
+It's a full interface: chat with message bubbles, a 🎤 talk button and 🔊 speak
+toggle (voice, nothing to install), and tabs for your **Memory**, **Routines**
+(create + schedule), **Connectors**, and **Settings** (name / timezone / theme).
+It's **100% local** — the page is served from your own PC; nothing goes online
+unless you turn on a cloud brain or the web tools.
+
+> Tip: create a desktop shortcut to `Myro.bat` and you've got a one-click app.
+
+---
+
 ## Step 4 — Give Myro a real brain (pick one, or both)
 
 **Option A — Claude on your subscription (recommended, best quality).**

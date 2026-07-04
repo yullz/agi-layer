@@ -1094,6 +1094,57 @@ def main() -> int:
     check("wake matching respects word boundaries (no false trigger)",
           c5 is None and w5.orch.turns == [])
 
+    # 35) browser app backend — the handlers behind the chat UI (Phase 24)
+    print("\n35) web app backend")
+    from core.onboarding import Onboarding as _OB
+    from core.routines import Routines as _RT
+    from interfaces.webapi import WebApp
+    wtl = _bdt(None, allow_web=False, connectors={"git_repo": repo_root})
+    wr = _ScriptRouter(['{"tool": "git_log", "args": {"n": 1}}', "Here's your latest commit."])
+    worch = _orch(wr, wtl, Agent(wr, wtl), "web")
+    worch.connectors = {"git_repo": repo_root}
+    worch.routines = _RT(os.path.join(tmp, "web_rt.json"), Agent(_ScriptRouter([]), wtl))
+    worch.onboarding = _OB(os.path.join(tmp, "web_onb.json"))
+    wa = WebApp(worch)
+    cres = wa.chat("show my latest commit", sid="s1", allow_actions=True)
+    check("web chat returns a reply with tool steps",
+          "commit" in cres["reply"].lower()
+          and any(s["tool"] == "git_log" for s in cres["steps"]))
+    st = wa.status("s1")
+    check("web status reports name + memory count", st["name"] == "Myro" and "memory" in st)
+    wa.remember("My cat is Milo.", scope=None)
+    check("web remember + memory list", any("Milo" in x for x in wa.memory("cat")["items"]))
+    wa.set_profile(name="Alex", timezone="Europe/Berlin", hours="9 to 6")
+    prof = wa.profile()
+    check("web profile derives timezone + hours",
+          prof["name"] == "Alex" and "Berlin" in prof["timezone"]
+          and prof["work_start"] == "09:00" and prof["work_end"] == "18:00")
+    check("web connectors + tools listed",
+          wa.connectors()["status"].get("git", "").startswith("ok")
+          and any(t["name"] == "git_log" for t in wa.tools()["tools"]))
+    wa.install_starters()
+    wa.add_routine("hello", "say hi")
+    names = [r["name"] for r in wa.routines()["routines"]]
+    check("web routines install + add + list", "hello" in names and "phone_briefing" in names)
+    sc = wa.schedule_routine("hello", "at 08:00")
+    hello = next(r for r in wa.routines()["routines"] if r["name"] == "hello")
+    check("web schedule a routine", sc["ok"] and "08:00" in hello["schedule"])
+
+    gtl = _bdt(None, allow_web=False, connectors={"calendar_file": os.path.join(tmp, "web.ics")})
+    gr = _ScriptRouter(['{"tool": "calendar_add_event", "args": {"title": "X", "start": "2030-01-01 09:00"}}', "ok"])
+    gorch = _orch(gr, gtl, Agent(gr, gtl), "webg")
+    gorch.routines = _RT(os.path.join(tmp, "wg.json"), Agent(_ScriptRouter([]), gtl))
+    gorch.onboarding = _OB(os.path.join(tmp, "wg_onb.json"))
+    dres = WebApp(gorch).chat("add an event", allow_actions=False)
+    check("web read-only mode denies gated actions",
+          any(s["tool"] == "calendar_add_event" and s["denied"] for s in dres["steps"]))
+
+    idx = os.path.join(repo_root, "interfaces", "static", "index.html")
+    with open(idx, encoding="utf-8") as f:
+        html = f.read()
+    check("web app page exists and wires the chat API",
+          "/api/" in html and "chat" in html and "Myro" in html and "speechSynthesis" in html)
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

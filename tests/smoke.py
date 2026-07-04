@@ -602,6 +602,66 @@ def main() -> int:
           any(s["tool"] == "browse_do" and "denied" in str(s["result"])
               for s in gres["steps"]))
 
+    # 24) networked connectors — GitHub / IMAP / calendar-URL (Phase 15)
+    print("\n24) networked connectors")
+    gh_json = ('[{"sha":"abcdef1234","commit":{"message":"Fix bug\\nmore",'
+               '"author":{"name":"Al"}}}]')
+    check("github commit JSON parses",
+          conn._parse_github_commits(gh_json) == [("abcdef1", "Fix bug", "Al")])
+    check("github_recent guards a bad repo id", conn.github_recent("noslash").startswith("("))
+    check("calendar over a URL keeps the SSRF guard",
+          "blocked" in conn.calendar_upcoming("http://127.0.0.1/cal.ics"))
+    check("imap header formatting", conn._fmt_headers("a@b", "Hi", "Mon") == "Mon · a@b — Hi")
+    check("imap connector is config-gated", "not configured" in conn.imap_recent("", "", ""))
+    stt2 = conn.connector_status({"git_repo": repo_root, "github_repo": "octocat/Hello-World",
+                                  "imap_host": "imap.x", "imap_user": "u", "imap_password": "p"})
+    check("status reports networked connectors",
+          stt2["github"].startswith("ok") and stt2["imap"].startswith("ok"))
+    ntools = _bdt(None, allow_web=False,
+                  connectors={"git_repo": repo_root, "github_repo": "a/b"})
+    itools = _bdt(None, allow_web=False,
+                  connectors={"imap_host": "h", "imap_user": "u", "imap_password": "p"})
+    check("github tool registered; imap tool only when configured",
+          "github_recent" in ntools.names() and "email_imap" in itools.names()
+          and "email_imap" not in ntools.names())
+
+    # 25) perceive-act browsing loop (Phase 15)
+    print("\n25) perceive-act browsing loop")
+    from core.browser_agent import BrowserPilot
+
+    class _FakeSession:
+        def __init__(self, obs):
+            self._obs, self.acted = list(obs), []
+
+        def observe(self):
+            return self._obs.pop(0) if self._obs else "URL: end\nTEXT: end\nELEMENTS:"
+
+        def act(self, action):
+            self.acted.append(action)
+            return "ok"
+
+        def close(self):
+            pass
+
+    fake = _FakeSession(["obs1", "obs2", "obs3"])
+    pilot = BrowserPilot(_ScriptRouter(['{"action": "click", "target": "text=Login"}',
+                                        '{"action": "fill", "target": "#u", "value": "al"}',
+                                        '{"done": "logged in"}']))
+    pres = pilot.run("https://x.test", "log in", session=fake)
+    check("perceive-act runs actions then finishes",
+          pres["answer"] == "logged in" and len(pres["steps"]) == 2
+          and fake.acted[0]["action"] == "click" and fake.acted[1]["value"] == "al")
+    check("perceive-act blocks a private URL",
+          "blocked" in BrowserPilot(_ScriptRouter([])).run("http://127.0.0.1/", "x")["answer"])
+    check("perceive-act needs Playwright for a real page",
+          "Playwright" in BrowserPilot(_ScriptRouter([])).run("http://example.invalid/", "x")["answer"])
+    bp = BrowserPilot(_ScriptRouter([]))
+    check("browse_agent registered and gated",
+          _bdt(None, allow_web=True, browser_pilot=bp).get("browse_agent") is not None
+          and not _bdt(None, allow_web=True, browser_pilot=bp).get("browse_agent").unattended)
+    check("browse_agent omitted without a pilot",
+          _bdt(None, allow_web=True).get("browse_agent") is None)
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

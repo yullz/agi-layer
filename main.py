@@ -20,6 +20,7 @@ from governance.guardrails import Guardrails
 from governance.versioning import Versioning
 from improvement.optimizer import Optimizer
 from core.agent import Agent
+from core.browser_agent import BrowserPilot
 from core.context_builder import ContextBuilder
 from core.orchestrator import Orchestrator
 from core.policy import Policy
@@ -110,8 +111,13 @@ def build():
     # Every tool call is audited; write/exec tools are gated (confirm required),
     # and routines run unattended so those gated tools are denied fail-closed.
     connectors = ({"git_repo": cfg.git_repo, "calendar_file": cfg.calendar_file,
-                   "mailbox_file": cfg.mailbox_file} if cfg.allow_connectors else None)
-    tools = build_default_tools(memory, allow_web=cfg.allow_web, connectors=connectors)
+                   "mailbox_file": cfg.mailbox_file, "github_repo": cfg.github_repo,
+                   "github_token": cfg.github_token, "imap_host": cfg.imap_host,
+                   "imap_user": cfg.imap_user, "imap_password": cfg.imap_password}
+                  if cfg.allow_connectors else None)
+    pilot = BrowserPilot(router) if cfg.allow_web else None
+    tools = build_default_tools(memory, allow_web=cfg.allow_web, connectors=connectors,
+                                browser_pilot=pilot)
     orchestrator.tools = tools
     orchestrator.connectors = connectors
     orchestrator.agent = Agent(router, tools, audit=audit)

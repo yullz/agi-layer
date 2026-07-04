@@ -24,6 +24,7 @@ browser = ["playwright>=1.40"]           # real JS-rendered pages for the `brows
 voice = ["pyttsx3"]                       # local text-to-speech for :voice (else OS TTS)
 voice-input = ["SpeechRecognition"]       # speech-to-text for :listen (+ a mic backend
                                           # like pyaudio, and openai-whisper or vosk)
+backup = ["cryptography"]                 # encrypt backups before they leave your machine
 dev = ["pytest", "ruff", "mypy"]
 
 [project.scripts]

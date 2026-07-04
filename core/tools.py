@@ -364,10 +364,15 @@ def _speak(speaker, text):
     return "spoke" if spoke else "(no voice engine available on this machine)"
 
 
+def _do_backup(cfg):
+    from core import backup as _bk
+    return _bk.summary(_bk.run_backup(cfg))
+
+
 def build_default_tools(memory=None, allow_web: bool = True,
                         connectors: dict | None = None,
                         browser_pilot=None, notify_config: dict | None = None,
-                        speaker=None) -> ToolRegistry:
+                        speaker=None, backup_config: dict | None = None) -> ToolRegistry:
     reg = ToolRegistry()
     reg.add(Tool("now", "Get the current date and time.",
                  lambda a: time.strftime("%Y-%m-%d %H:%M"), unattended=True))
@@ -464,6 +469,11 @@ def build_default_tools(memory=None, allow_web: bool = True,
         reg.add(Tool("speak", "Read text aloud on the user's machine (local text-to-speech).",
                      lambda a: _speak(speaker, a.get("text", "")),
                      params={"text": "str"}, unattended=True))
+    if backup_config is not None:
+        # Local-first snapshot of the user's own data; unattended so a routine can
+        # back up on a schedule. Only writes locally unless a git dir is set.
+        reg.add(Tool("backup", "Back up Myro's memory and settings (a local snapshot).",
+                     lambda a: _do_backup(backup_config), unattended=True))
     if notify_config is not None:
         from core import notify as _notify
         if _notify.channel(notify_config) is not None:

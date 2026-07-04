@@ -115,6 +115,14 @@ class Settings:
     # How often (seconds) the background tick checks for due scheduled routines.
     routine_tick_seconds: float = 60.0
 
+    # Backups — snapshot data/ locally (point backup_dir at a synced drive for
+    # off-site backup). Optional: a passphrase to encrypt, and a local clone of a
+    # PRIVATE git repo to also push snapshots to GitHub.
+    backup_dir: str | None = None            # default: <data>/backups
+    backup_keep: int = 7
+    backup_passphrase: str | None = None     # AGI_BACKUP_PASSPHRASE (needs `cryptography`)
+    backup_git_dir: str | None = None        # AGI_BACKUP_GIT_DIR
+
     # Voice — speak replies aloud via a local TTS engine (CLI). Off by default.
     voice_enabled: bool = False
     # Wake word for the hands-free voice interface (AGI_INTERFACE=voice). Myro
@@ -148,6 +156,9 @@ class Settings:
         _ov("timezone", "AGI_TIMEZONE")
         _ov("voice_enabled", "AGI_VOICE", lambda v: v.strip().lower() in ("1", "on", "true", "yes"))
         _ov("wake_word", "AGI_WAKE_WORD")
+        _ov("backup_dir", "AGI_BACKUP_DIR")
+        _ov("backup_git_dir", "AGI_BACKUP_GIT_DIR")
+        _ov("backup_passphrase", "AGI_BACKUP_PASSPHRASE")
         _ov("telegram_token", "AGI_TELEGRAM_TOKEN")
         _ov("telegram_chat_id", "AGI_TELEGRAM_CHAT_ID")
         _ov("ntfy_topic", "AGI_NTFY_TOPIC")

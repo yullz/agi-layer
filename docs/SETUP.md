@@ -164,6 +164,22 @@ keyboard.)
 > Note: for phone features, your computer needs to be **on and running Myro**
 > while you're away.
 
+### 💾 Back up everything you've built
+Myro can snapshot his memory so you never lose it. Easiest private setup — send
+snapshots to a folder your cloud drive already syncs:
+```bash
+export AGI_BACKUP_DIR="$HOME/OneDrive/Myro-backups"   # or Dropbox/Google Drive
+export AGI_BACKUP_PASSPHRASE="a long phrase you'll remember"   # encrypt them (recommended)
+pip install -e ".[backup]"                            # for encryption
+```
+Then click **"Back up now"** in the app's Settings, type `:backup` in the
+terminal, or install the nightly routine: `:starters` then
+`:schedule backup at 02:00`. Prefer GitHub? Clone a **private** backup repo and
+set `AGI_BACKUP_GIT_DIR` to it — Myro pushes each snapshot there.
+
+> Your memory is personal — if backups leave your machine (cloud drive or
+> GitHub), set a passphrase so they're encrypted.
+
 ---
 
 ## Step 6 — Settings & secrets (env vars)

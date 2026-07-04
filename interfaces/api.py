@@ -114,6 +114,10 @@ def build_app(orchestrator, store=None):
     def starters():
         return web.install_starters()
 
+    @app.post("/api/backup")
+    def backup():
+        return web.backup()
+
     # --- back-compat machine API ---
     @app.post("/turn")
     def turn(body: ChatIn):

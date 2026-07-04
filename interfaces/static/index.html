@@ -282,6 +282,12 @@
           <div id="profStatus"></div>
         </div>
         <div class="card">
+          <h3>Backup</h3>
+          <div class="hint">Snapshot everything you've built (memory, routines, settings). Stays on your machine — point the backup folder at OneDrive/Dropbox, or configure encryption + a private GitHub repo, in setup.</div>
+          <button class="btn" id="backupBtn">Back up now</button>
+          <span id="backupMsg" class="muted" style="margin-left:10px"></span>
+        </div>
+        <div class="card">
           <h3>Appearance</h3>
           <div class="kv"><span class="k">Theme</span>
             <button class="sbtn" id="themeBtn2">Toggle light / dark</button></div>
@@ -454,6 +460,10 @@ async function loadProfile(){
 $('#pSaveBtn').onclick=async()=>{
   await api('profile',{name:$('#pName').value.trim(),timezone:$('#pTz').value.trim(),hours:$('#pHours').value.trim()});
   toast('Saved.');loadProfile();refreshStatus();
+};
+if($('#backupBtn'))$('#backupBtn').onclick=async()=>{
+  const b=$('#backupBtn');b.disabled=true;$('#backupMsg').textContent='Backing up…';
+  const r=await api('backup',{});$('#backupMsg').textContent=r.message||'Done.';b.disabled=false;toast('Backup complete.');
 };
 
 refreshStatus();setInterval(refreshStatus,20000);input.focus();

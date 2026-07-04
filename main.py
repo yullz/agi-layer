@@ -177,7 +177,7 @@ def main():
             serve_telegram(orchestrator, cfg)
         elif iface == "voice":
             from interfaces.voice import serve_voice
-            serve_voice(orchestrator)
+            serve_voice(orchestrator, cfg)
         else:
             run_repl(orchestrator, Session())
     finally:

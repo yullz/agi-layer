@@ -12,7 +12,7 @@ embeddings light it up further — nothing is required to start.
 ```bash
 python main.py        # first boot: Myro asks a few questions to get to know you,
                       # then just talk to him — ask, or ask him to do things
-python tests/smoke.py # 164 offline checks prove the whole spine
+python tests/smoke.py # 169 offline checks prove the whole spine
 ```
 
 Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
@@ -57,7 +57,8 @@ Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
   gated by fail-closed guardrails, snapshot/rollback, and an audit log.
 - **Reaches you anywhere — and listens.** **Speaks** replies aloud via local TTS
   (`:voice on`, plus a `speak` tool routines can use), **hears you** via local
-  speech-to-text (`:listen`, or fully hands-free with `AGI_INTERFACE=voice`),
+  speech-to-text (`:listen`, or fully hands-free with a **wake word** —
+  "Hey Myro" — via `AGI_INTERFACE=voice`),
   **pushes to your phone** (ntfy / Telegram / Pushover — the unattended `notify`
   tool, so a scheduled briefing lands on your phone), and lets you **text him**
   from anywhere via a **Telegram** bridge (`AGI_INTERFACE=telegram`, authorized
@@ -79,7 +80,7 @@ agi-layer/
 │                        echo, embeddings, reranker, registry
 ├── improvement/         feedback, optimizer, gepa_optimizer, skills (self-authoring)
 ├── governance/          audit, guardrails (fail-closed), versioning
-├── interfaces/          cli, api, mcp
+├── interfaces/          cli, api, mcp, telegram, voice (+ wake word)
 ├── config/              settings + models.yaml
 ├── data/                your memory lives here (gitignored)
 └── main.py              composition root

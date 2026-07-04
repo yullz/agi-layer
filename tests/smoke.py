@@ -931,7 +931,9 @@ def main() -> int:
           prof.parse_timezone("Atlanta") is None)   # 'la' must not match Atlanta
     check("working hours parse from free text",
           prof.parse_working_hours("9am to 6pm") == ("09:00", "18:00")
-          and prof.parse_working_hours("9 to 5") == ("09:00", "17:00"))
+          and prof.parse_working_hours("9 to 5") == ("09:00", "17:00")
+          and prof.parse_working_hours("9 to 6") == ("09:00", "18:00")   # end < start -> PM
+          and prof.parse_working_hours("10:00-18:00") == ("10:00", "18:00"))
     check("derive builds a profile from onboarding answers",
           prof.derive({"location": "Berlin", "hours": "9 to 5"})
           == {"timezone": "Berlin", "work_start": "09:00", "work_end": "17:00"})
@@ -1063,6 +1065,34 @@ def main() -> int:
           h2 == "__stop__" and vlo.turns == ["what's my name"])
     h3, r3 = vl.once()
     check("voice loop ignores empty input", h3 is None and r3 is None)
+
+    # 34) wake word — always-listening, only acts after "Hey Myro" (Phase 23)
+    print("\n34) wake word")
+    from core.voice_loop import WakeLoop
+
+    def _wake(phrases):
+        return WakeLoop(_VLOrch(), _FakeListener(phrases), _FakeSpeaker(), wake="Myro")
+
+    w1 = _wake(["hey myro what's my name"])
+    c1, rp1 = w1.once()
+    check("wake word + command in one breath runs the command",
+          c1 == "what's my name" and rp1 == "heard:what's my name"
+          and w1.orch.turns == ["what's my name"])
+    w2 = _wake(["the weather is nice today"])
+    c2, _ = w2.once()
+    check("no wake word -> nothing happens", c2 is None and w2.orch.turns == [])
+    w3 = _wake(["hey myro", "add milk to my list"])
+    c3, _ = w3.once()
+    check("wake word alone -> acknowledges, then takes the next command",
+          c3 == "add milk to my list" and w3.orch.turns == ["add milk to my list"]
+          and any("Yes" in t for t, _f in w3.speaker.said))
+    w4 = _wake(["stop listening"])
+    c4, _ = w4.once()
+    check("wake loop stops on a stop phrase", c4 == "__stop__" and w4.orch.turns == [])
+    w5 = _wake(["myron went to the store"])   # 'myro' inside a word must not trigger
+    c5, _ = w5.once()
+    check("wake matching respects word boundaries (no false trigger)",
+          c5 is None and w5.orch.turns == [])
 
     print()
     if all(_results):

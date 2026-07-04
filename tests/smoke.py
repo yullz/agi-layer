@@ -944,6 +944,66 @@ def main() -> int:
           any(f["name"] == "brief" for f in r_tz.run_due(now=tbase)))
     check("timezone flows into the routine scheduler", r_tz.tz is tzp)
 
+    # 32) reach me — voice + phone notifications + telegram bridge (Phase 20)
+    print("\n32) voice + notifications + telegram bridge")
+    from core.voice import Speaker
+    sp = Speaker(enabled=True)
+    check("voice degrades cleanly with no TTS engine",
+          isinstance(sp.speak("hello"), bool) and sp.speak("") is False)
+    check("voice toggle works", sp.toggle(False) is False and sp.toggle(True) is True)
+
+    from core import notify as notif
+    check("notify reports no channel when unconfigured",
+          "no notification channel" in notif.notify({}, "t", "m"))
+    nt = notif.build_request({"ntfy_topic": "myro", "ntfy_server": "https://ntfy.sh"}, "Hi", "body")
+    check("ntfy request targets the topic with a title",
+          nt[0] == "https://ntfy.sh/myro" and nt[1] == b"body" and nt[2].get("Title") == "Hi")
+    tg = notif.build_request({"telegram_token": "T", "telegram_chat_id": "42"}, "", "hey")
+    check("telegram request posts to sendMessage for the chat",
+          tg[0].endswith("/botT/sendMessage") and b"chat_id=42" in tg[1] and b"hey" in tg[1])
+    check("channel selection prefers ntfy > telegram > pushover",
+          notif.channel({"ntfy_topic": "x", "telegram_token": "T", "telegram_chat_id": "1"}) == "ntfy"
+          and notif.channel({"telegram_token": "T", "telegram_chat_id": "1"}) == "telegram"
+          and notif.channel({"pushover_token": "p", "pushover_user": "u"}) == "pushover"
+          and notif.channel({}) is None)
+
+    from core.telegram_bridge import TelegramBridge
+
+    class _FakeTgOrch:
+        def __init__(self):
+            self.turns = []
+
+        def handle_turn(self, text, session, confirm=None):
+            self.turns.append((text, confirm))
+            return f"echo:{text}"
+
+    class _FakeTgClient:
+        def __init__(self, updates):
+            self._u = list(updates)
+            self.sent = []
+
+        def get_updates(self, offset):
+            return [u for u in self._u if u["update_id"] >= offset]
+
+        def send_message(self, chat, text):
+            self.sent.append((chat, text))
+
+    ups = [
+        {"update_id": 1, "message": {"chat": {"id": 42}, "text": "hi myro"}},
+        {"update_id": 2, "message": {"chat": {"id": 999}, "text": "let me in"}},
+        {"update_id": 3, "message": {"chat": {"id": 42}, "text": "  "}},
+    ]
+    fo, fc = _FakeTgOrch(), _FakeTgClient(ups)
+    br = TelegramBridge(fo, fc, chat_id=42)
+    handled = br.poll_once()
+    check("telegram bridge relays only the authorized chat",
+          handled == 1 and [t[0] for t in fo.turns] == ["hi myro"]
+          and fc.sent == [("42", "echo:hi myro")])
+    check("telegram turns run non-interactively (gated writes denied)",
+          bool(fo.turns) and fo.turns[0][1] is None)
+    check("telegram bridge advances offset + no re-processing",
+          br._offset == 4 and br.poll_once() == 0)
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

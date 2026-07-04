@@ -361,7 +361,7 @@ def _browse_do(args):
 
 def build_default_tools(memory=None, allow_web: bool = True,
                         connectors: dict | None = None,
-                        browser_pilot=None) -> ToolRegistry:
+                        browser_pilot=None, notify_config: dict | None = None) -> ToolRegistry:
     reg = ToolRegistry()
     reg.add(Tool("now", "Get the current date and time.",
                  lambda a: time.strftime("%Y-%m-%d %H:%M"), unattended=True))
@@ -452,6 +452,15 @@ def build_default_tools(memory=None, allow_web: bool = True,
                                                 connectors.get("smtp_from"),
                                                 port=int(connectors.get("smtp_port") or 587)),
                          params={"to": "str", "subject": "str", "body": "str"}, unattended=False))
+    if notify_config is not None:
+        from core import notify as _notify
+        if _notify.channel(notify_config) is not None:
+            # Unattended: it can only reach the user's OWN configured device, so a
+            # routine can push a briefing without a confirmation prompt.
+            reg.add(Tool("notify", "Send a push notification to the user's own phone.",
+                         lambda a: _notify.notify(notify_config, a.get("title", ""),
+                                                  a.get("message", "")),
+                         params={"title": "str", "message": "str"}, unattended=True))
     if memory is not None:
         reg.add(Tool("recall", "Search your memory for what you know.",
                      lambda a: _recall(memory, a), params={"query": "str"}, unattended=True))

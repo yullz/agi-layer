@@ -12,7 +12,7 @@ embeddings light it up further — nothing is required to start.
 ```bash
 python main.py        # first boot: Myro asks a few questions to get to know you,
                       # then just talk to him — ask, or ask him to do things
-python tests/smoke.py # 146 offline checks prove the whole spine
+python tests/smoke.py # 155 offline checks prove the whole spine
 ```
 
 Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
@@ -55,6 +55,11 @@ Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
   event**, **send email** (SMTP).
 - **Improves under governance.** Feedback → a routing optimizer (GEPA-ready),
   gated by fail-closed guardrails, snapshot/rollback, and an audit log.
+- **Reaches you anywhere.** **Speaks** replies aloud via local TTS (`:voice on`),
+  **pushes to your phone** (ntfy / Telegram / Pushover — the unattended `notify`
+  tool, so a scheduled briefing lands on your phone), and lets you **text him**
+  from anywhere via a **Telegram** bridge (`AGI_INTERFACE=telegram`, authorized
+  chat only, gated writes denied over the wire).
 - **Is a bridge.** Exposes `ask` / `retrieve_memory` / `remember` over **MCP** so
   your other agents share this brain (`AGI_INTERFACE=mcp`), plus a localhost HTTP
   API (`AGI_INTERFACE=api`).

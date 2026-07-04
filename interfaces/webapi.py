@@ -179,39 +179,59 @@ class WebApp:
                 "memory": self._memory_count(), "scope": sess.active_scope,
                 "models": list(self._registry_names()), "brain": self._brain()}
 
-    # --- brain preference (local-first vs. auto-route) ----------------------
-    def set_brain(self, mode: str) -> dict:
-        """'local' keeps everyday chat on the on-box model (private + free);
-        'auto' routes to the best available brain (e.g. Claude). Persists."""
+    # --- brain: which model answers, and how hard it thinks -----------------
+    def set_model(self, model: str) -> dict:
+        """Pin a model for every prompt until changed ('auto' = automatic)."""
         from core import brain
-        prefer = str(mode).strip().lower() in ("local", "on", "1", "true", "private")
         policy = getattr(self.orch, "policy", None)
         reg = getattr(getattr(self.orch, "router", None), "registry", None)
         if policy is None or reg is None:
             return {"ok": False}
-        eff = brain.apply_preference(policy, reg, prefer)
-        data_dir = getattr(self.orch, "data_dir", None)
-        if data_dir is not None:
-            brain.save_pref(data_dir, eff)
+        brain.apply_choice(policy, reg, model)
+        self._save_brain()
         return {"ok": True, **self._brain()}
 
+    def set_effort(self, effort: str) -> dict:
+        """How thorough the Claude backend is: quick | balanced | thorough."""
+        from core import brain
+        reg = getattr(getattr(self.orch, "router", None), "registry", None)
+        if reg is None:
+            return {"ok": False}
+        brain.set_effort(reg, effort)
+        self._save_brain()
+        return {"ok": True, **self._brain()}
+
+    def _save_brain(self) -> None:
+        from core import brain
+        policy = getattr(self.orch, "policy", None)
+        reg = getattr(getattr(self.orch, "router", None), "registry", None)
+        data_dir = getattr(self.orch, "data_dir", None)
+        if policy is None or reg is None or data_dir is None:
+            return
+        brain.save_state(data_dir, brain.current_choice(policy, reg), brain.current_effort(reg))
+
     def _brain(self) -> dict:
-        """{mode: local|auto, model: <what a general turn would use>, local: bool}."""
+        """Current selection + the picker's options, for the Settings UI."""
         from core import brain
         policy = getattr(self.orch, "policy", None)
         router = getattr(self.orch, "router", None)
         reg = getattr(router, "registry", None)
-        mode = "local" if (policy is not None and reg is not None
-                           and brain.is_local_preferred(policy, reg)) else "auto"
-        picked, local = None, False
+        if reg is None:
+            return {"choice": "auto", "model": None, "local": False,
+                    "effort": brain.DEFAULT_EFFORT, "options": [],
+                    "efforts": list(brain.EFFORTS)}
+        choice = brain.current_choice(policy, reg) if policy is not None else "auto"
+        active, local = None, False
         if router is not None:
             try:
                 m = router.pick("hello", None)
-                picked = getattr(m, "model_name", None) or getattr(m, "name", None)
+                active = getattr(m, "model_name", None) or getattr(m, "name", None)
                 local = bool(getattr(m, "is_local", False))
             except Exception:
                 pass
-        return {"mode": mode, "model": picked, "local": local}
+        return {"choice": choice, "model": active, "local": local,
+                "effort": brain.current_effort(reg),
+                "options": brain.options(reg), "efforts": list(brain.EFFORTS)}
 
     def _registry_names(self):
         reg = getattr(getattr(self.orch, "router", None), "registry", None)

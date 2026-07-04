@@ -22,6 +22,7 @@ class AgentSDKModel:
     def __init__(self, name: str, model: str | None = None, **opts):
         self.model_name = name
         self.model = model  # optional explicit Claude model id; None = plan default
+        self.effort = opts.pop("effort", None)  # quick | balanced | thorough
         self.opts = opts
 
     def available(self) -> bool:
@@ -43,6 +44,7 @@ class AgentSDKModel:
     async def _agenerate(self, prompt) -> str:
         from claude_agent_sdk import ClaudeAgentOptions, query
         system, user = _split(prompt)
+        system = _apply_effort(system, self.effort)
         opts: dict = {}
         if system:
             opts["system_prompt"] = system
@@ -56,6 +58,21 @@ class AgentSDKModel:
                 if text:
                     chunks.append(text)
         return "".join(chunks).strip()
+
+
+_EFFORT_HINT = {
+    "quick": "Answer briefly and directly — as few words as the question needs.",
+    "thorough": "Think it through carefully and reason step by step before "
+                "answering; be thorough and complete.",
+}
+
+
+def _apply_effort(system: str, effort) -> str:
+    """Steer how hard Claude works via a system directive (balanced = default)."""
+    hint = _EFFORT_HINT.get(str(effort or "").lower())
+    if not hint:
+        return system
+    return (system.rstrip() + "\n\n" + hint) if system else hint
 
 
 def _split(prompt):

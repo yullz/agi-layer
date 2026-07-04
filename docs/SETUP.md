@@ -86,7 +86,7 @@ touches your memories.
 Want the deeper developer check too?
 
 ```bash
-python tests/smoke.py        # should print "All 200 checks PASS"
+python tests/smoke.py        # should print "All 208 checks PASS"
 ```
 
 If both look good, your install is healthy.
@@ -239,7 +239,7 @@ starting Myro:
 | `AGI_USER_NAME` | so he greets you by name |
 | `AGI_TIMEZONE` | your timezone (e.g. `Europe/Berlin`) for scheduling |
 | `AGI_VOICE=on` | speak replies by default |
-| `AGI_PREFER_LOCAL=on` | keep everyday chat on your local model even if Claude is set up (also a toggle in the app's Settings → Brain) |
+| `AGI_PREFER_LOCAL=on` | start with your local model as the default even if Claude is set up (change any time via the Model picker in the app's Settings → Brain) |
 | `AGI_WAKE_WORD` | the hands-free wake word (default `Myro`) |
 | `AGI_NTFY_TOPIC` | phone notifications via ntfy |
 | `AGI_TELEGRAM_TOKEN` / `AGI_TELEGRAM_CHAT_ID` | text him via Telegram |

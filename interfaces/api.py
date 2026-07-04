@@ -58,8 +58,11 @@ def build_app(orchestrator, store=None):
     class SidIn(BaseModel):
         sid: str = "default"
 
-    class BrainIn(BaseModel):
-        mode: str
+    class ModelIn(BaseModel):
+        model: str
+
+    class EffortIn(BaseModel):
+        effort: str
 
     # --- the app page ---
     @app.get("/")
@@ -80,9 +83,13 @@ def build_app(orchestrator, store=None):
     def status(sid: str = "default"):
         return web.status(sid)
 
-    @app.post("/api/brain")
-    def brain_set(body: BrainIn):
-        return web.set_brain(body.mode)
+    @app.post("/api/model")
+    def model_set(body: ModelIn):
+        return web.set_model(body.model)
+
+    @app.post("/api/effort")
+    def effort_set(body: EffortIn):
+        return web.set_effort(body.effort)
 
     @app.get("/api/memory")
     def memory_get(q: str = "", scope: str | None = None, sid: str = "default"):

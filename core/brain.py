@@ -1,14 +1,13 @@
-"""Brain preference — local-first vs. auto-route.
+"""Brain selection — which model answers, and how hard it thinks.
 
-By default the router sends everyday chat to the best available model (Claude on
-your plan, if configured) and keeps the on-box model for sensitive scopes. Some
-people would rather keep *everything* on the local model — private and free, even
-if a cloud brain is set up. This module flips that preference by writing the two
-general-purpose routing intents to the local model (sensitive scopes are already
-forced local, and the fallback is unchanged), and persists the choice.
+By default Myro routes each turn to the best available model (Auto). You can
+instead pin a specific model so every prompt uses it until you change it — your
+local model (private + free), a specific Claude model, or the offline echo — via
+`apply_choice`. Sensitive scopes always stay on the local model regardless.
 
-It never removes the cloud model — turning the preference back to "auto" restores
-normal routing instantly.
+`effort` is a light steer for how thorough the answer should be; it's applied to
+the Claude backend (which honours it in how it reasons). The chosen model +
+effort persist in data/brain.json so they survive restarts.
 """
 from __future__ import annotations
 
@@ -16,13 +15,29 @@ import json
 import os
 from pathlib import Path
 
+# The two general-purpose routing intents we override to pin a model. (Sensitive
+# scope is handled separately and always local.)
 _INTENTS = ("general", "hard_reasoning")
+
+EFFORTS = ("quick", "balanced", "thorough")
+DEFAULT_EFFORT = "balanced"
+
+# Friendly labels for the picker; unknown model names fall back to themselves.
+_LABELS = {
+    "qwen-local": "Local · private & free",
+    "claude-opus": "Claude Opus · deepest",
+    "claude-sonnet": "Claude Sonnet · fast",
+    "echo": "Offline (echo)",
+}
+
+
+def label_for(name: str) -> str:
+    return _LABELS.get(name, name)
 
 
 def local_model_name(registry) -> str | None:
-    """The registry name of an on-box model to route to — the configured private
-    default if it's local, else any local backend. None if there's no local model
-    (e.g. Ollama isn't set up), in which case we leave routing alone."""
+    """Registry name of an on-box model (the private default if local, else any
+    local backend). None when there's no local model configured."""
     priv = registry.default_name("private")
     if priv:
         m = registry.get(priv)
@@ -35,53 +50,97 @@ def local_model_name(registry) -> str | None:
     return None
 
 
-def apply_preference(policy, registry, prefer_local: bool) -> bool:
-    """Set (or clear) the local-first routing rules on the live policy. Returns
-    the effective preference — False if 'local' was asked for but no local model
-    exists to route to."""
+def options(registry) -> list[dict]:
+    """The picker's choices: Auto first, then every registered model."""
+    out = [{"value": "auto", "label": "Auto · best for each task"}]
+    for n in registry.names():
+        out.append({"value": n, "label": label_for(n)})
+    return out
+
+
+def apply_choice(policy, registry, choice: str) -> str:
+    """Pin the model for everyday turns (or clear the pin for Auto). `choice` is
+    'auto', 'local', or a registry model name. Returns the effective choice
+    ('auto' when the requested model doesn't exist)."""
+    choice = (choice or "auto").strip()
     rules = dict(getattr(policy, "routing_rules", None) or {})
-    if prefer_local:
-        name = local_model_name(registry)
-        if not name:
-            return False
-        for intent in _INTENTS:
-            rules[intent] = name
-    else:
+    if choice in ("auto", ""):
         for intent in _INTENTS:
             rules.pop(intent, None)
+        policy.routing_rules = rules
+        return "auto"
+    name = local_model_name(registry) if choice == "local" else choice
+    if not name or registry.get(name) is None:
+        for intent in _INTENTS:
+            rules.pop(intent, None)
+        policy.routing_rules = rules
+        return "auto"
+    for intent in _INTENTS:
+        rules[intent] = name
     policy.routing_rules = rules
-    return bool(prefer_local)
+    return name
 
 
-def is_local_preferred(policy, registry) -> bool:
-    """True when the general intent is currently pinned to a local model."""
-    rules = getattr(policy, "routing_rules", None) or {}
-    name = rules.get("general")
-    if not name:
-        return False
-    m = registry.get(name)
-    return m is not None and getattr(m, "is_local", False)
+def current_choice(policy, registry) -> str:
+    """The pinned model name, or 'auto' when nothing is pinned."""
+    name = (getattr(policy, "routing_rules", None) or {}).get("general")
+    if name and registry.get(name) is not None:
+        return name
+    return "auto"
 
 
-# --- persistence (a tiny marker in the data dir) ----------------------------
+def set_effort(registry, effort: str) -> str:
+    """Record the effort level on the cloud (Claude) adapters so their next call
+    honours it. Local/echo ignore it. Returns the normalised effort."""
+    effort = (effort or DEFAULT_EFFORT).strip().lower()
+    if effort not in EFFORTS:
+        effort = DEFAULT_EFFORT
+    for n in registry.names():
+        m = registry.get(n)
+        if m is not None and not getattr(m, "is_local", False):
+            try:
+                m.effort = effort
+            except Exception:
+                pass
+    return effort
+
+
+def current_effort(registry) -> str:
+    for n in registry.names():
+        m = registry.get(n)
+        if m is not None and not getattr(m, "is_local", False):
+            e = getattr(m, "effort", None)
+            if e in EFFORTS:
+                return e
+    return DEFAULT_EFFORT
+
+
+# --- persistence (a small marker in the data dir) ---------------------------
 def _file(data_dir) -> Path:
     return Path(data_dir) / "brain.json"
 
 
-def load_pref(data_dir) -> bool | None:
-    """Saved preference, or None if the user hasn't chosen yet."""
+def load_state(data_dir) -> dict:
+    """{'model': <choice or None>, 'effort': <level or None>}. Empty when unset.
+    Understands the older {'prefer_local': true} marker for a smooth upgrade."""
     try:
         with open(_file(data_dir), encoding="utf-8") as f:
-            return bool(json.load(f).get("prefer_local"))
+            data = json.load(f)
     except Exception:
-        return None
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    model = data.get("model")
+    if model is None and data.get("prefer_local"):
+        model = "local"
+    return {"model": model, "effort": data.get("effort")}
 
 
-def save_pref(data_dir, prefer_local: bool) -> None:
+def save_state(data_dir, model: str, effort: str) -> None:
     p = _file(data_dir)
     try:
         os.makedirs(p.parent, exist_ok=True)
         with open(p, "w", encoding="utf-8") as f:
-            json.dump({"prefer_local": bool(prefer_local)}, f, indent=2)
+            json.dump({"model": model, "effort": effort}, f, indent=2)
     except Exception:
         pass

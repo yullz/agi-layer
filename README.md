@@ -1,16 +1,18 @@
 # agi-layer
 
 A local-first **personal intelligence layer** — a persistent memory + multi-model
-orchestration hub you run on your own machine. One process that remembers you
-across sessions, keeps sensitive things on your box, routes across models
-(frontier + local), and gets sharper the more you use it.
+orchestration hub you run on your own machine. The assistant is named **Myro**:
+one process that remembers you across sessions, keeps sensitive things on your
+box, routes across models (frontier + local), and gets sharper the more you use
+it.
 
 It **runs today**, fully offline, with zero external services. Real models and
 embeddings light it up further — nothing is required to start.
 
 ```bash
-python main.py        # then :seed, then just talk to it
-python tests/smoke.py # 42 offline checks prove the whole spine
+python main.py        # first boot: Myro asks a few questions to get to know you,
+                      # then just talk to him — ask, or ask him to do things
+python tests/smoke.py # 139 offline checks prove the whole spine
 ```
 
 Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and

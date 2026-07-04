@@ -10,16 +10,26 @@ from memory.schema import Role, Source
 
 def run_repl(orchestrator, session) -> None:
     proactive = Proactive(orchestrator.memory)
+    name = _assistant_name(orchestrator)
+    onboarding = getattr(orchestrator, "onboarding", None)
     n = _memory_count(orchestrator)
-    print("\n  agi-layer — your personal intelligence layer")
+    print(f"\n  {name} — your personal intelligence layer")
     print(f"  model: {_model_status(orchestrator)}   ·   memory: {n} fact(s)"
           f"   ·   type  :help  for commands")
-    if n == 0:
-        print("  My memory's empty — type  :seed  to load what we already know about you.")
+
+    if onboarding is not None and not onboarding.is_done():
+        # First interactive boot: get to know the user.
+        _run_onboarding(orchestrator, session, onboarding, name)
     else:
-        q = proactive.next_question(session.active_scope)
-        if q:
-            print(f"  (I still don't know your {q['key']} — tell me anytime, or type  :learn.)")
+        who = onboarding.name() if onboarding else None
+        if who:
+            print(f"  Welcome back, {who}.")
+        if n == 0:
+            print("  My memory's empty — type  :seed  to load what we already know about you.")
+        else:
+            q = proactive.next_question(session.active_scope)
+            if q:
+                print(f"  (I still don't know your {q['key']} — tell me anytime, or type  :learn.)")
     print()
 
     pending = None
@@ -80,9 +90,16 @@ def _handle_command(line, orch, session) -> bool:
         print(_HELP)
         return True
     if line == ":about":
-        print("I'm a local-first memory + model-routing layer. I remember what "
-              "matters to you across sessions, keep sensitive things on your "
-              "machine, and get sharper the more we talk.")
+        print(f"I'm {_assistant_name(orch)} — your local-first memory + model-routing "
+              "layer. I remember what matters to you across sessions, keep sensitive "
+              "things on your machine, and get sharper the more we talk.")
+        return True
+    if line in (":onboard", ":intro"):
+        onboarding = getattr(orch, "onboarding", None)
+        if onboarding is None:
+            print("Onboarding isn't available right now.")
+            return True
+        _run_onboarding(orch, session, onboarding, _assistant_name(orch), rerun=True)
         return True
     if line == ":status":
         print(f"model: {_model_status(orch)}  ·  memory: {_memory_count(orch)} facts  ·  "
@@ -272,6 +289,7 @@ _HELP = (
     "  :why <topic>          what a memory is based on (+ when)\n"
     "  :ingest <path>        learn from a file or folder\n"
     "  :learn                let me ask you something to get to know you\n"
+    "  :onboard              (re)run the introductory interview\n"
     "  :briefing             what's on my radar for you\n"
     "  :scope <name>         switch project scope (bare :scope shows current)\n"
     "  :seed                 load what we already know about you\n"
@@ -339,6 +357,46 @@ def _fmt_args(args) -> str:
 def _short(text, limit: int = 80) -> str:
     text = str(text).replace("\n", " ").strip()
     return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def _assistant_name(orch) -> str:
+    cb = getattr(orch, "context_builder", None)
+    return getattr(cb, "assistant_name", "Myro") or "Myro"
+
+
+def _run_onboarding(orch, session, onboarding, name, rerun: bool = False) -> None:
+    """Ask the introductory questions and store each answer as a durable memory."""
+    qs = onboarding.questions()
+    if rerun:
+        print(f"\n  Let's (re)do introductions — {len(qs)} quick questions.")
+    else:
+        print(f"\n  Hi — I'm {name}. Before we start, can I ask you {len(qs)} quick "
+              "questions")
+        print("  so I actually know you from the start?")
+    print("  (Press Enter to skip any · type 'stop' to finish early.)\n")
+    profile = {}
+    for i, q in enumerate(qs, 1):
+        try:
+            ans = input(f"  [{i}/{len(qs)}] {q['q']}\n  you> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if onboarding.is_stop(ans):
+            break
+        if onboarding.is_skip(ans):
+            continue
+        onboarding.record(orch.memory, q, ans, scope=None)
+        if q["key"] == "name":
+            profile["name"] = ans
+            try:
+                orch.context_builder.user_name = ans
+            except Exception:
+                pass
+    onboarding.complete(profile)
+    who = profile.get("name") or onboarding.name()
+    hi = f", {who}" if who else ""
+    print(f"\n  Thanks{hi} — that gives me a great start, and I'll remember it.")
+    print("  Tell me more anytime, or type  :learn.")
 
 
 def _optimize_msg(res) -> str:

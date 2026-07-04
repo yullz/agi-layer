@@ -122,10 +122,16 @@ def build():
                    "smtp_port": cfg.smtp_port}
                   if cfg.allow_connectors else None)
     pilot = BrowserPilot(router) if cfg.allow_web else None
+    notify_config = {"ntfy_topic": cfg.ntfy_topic, "ntfy_server": cfg.ntfy_server,
+                     "telegram_token": cfg.telegram_token,
+                     "telegram_chat_id": cfg.telegram_chat_id,
+                     "pushover_token": cfg.pushover_token, "pushover_user": cfg.pushover_user}
     tools = build_default_tools(memory, allow_web=cfg.allow_web, connectors=connectors,
-                                browser_pilot=pilot)
+                                browser_pilot=pilot, notify_config=notify_config)
     orchestrator.tools = tools
     orchestrator.connectors = connectors
+    orchestrator.notify_config = notify_config
+    orchestrator.voice_enabled = cfg.voice_enabled
     orchestrator.agent = Agent(router, tools, audit=audit)
     # Timezone from config, else derived from the onboarding location answer, so
     # daily routines fire at the user's local wall-clock.
@@ -150,7 +156,7 @@ def main():
                              interval_seconds=cfg.routine_tick_seconds)
     routine_tick.start()
     try:
-        # Choose an interface: cli (default) | api | mcp.
+        # Choose an interface: cli (default) | api | mcp | telegram.
         iface = os.environ.get("AGI_INTERFACE", "cli").lower()
         if iface == "api":
             from interfaces.api import build_app, serve
@@ -158,6 +164,9 @@ def main():
         elif iface == "mcp":
             from interfaces.mcp import build_mcp_server
             build_mcp_server(orchestrator.memory, orchestrator).run()
+        elif iface == "telegram":
+            from interfaces.telegram import serve_telegram
+            serve_telegram(orchestrator, cfg)
         else:
             run_repl(orchestrator, Session())
     finally:

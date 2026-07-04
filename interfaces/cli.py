@@ -5,12 +5,14 @@ import os
 import time
 
 from core.proactive import Proactive
+from core.voice import Speaker
 from memory.schema import Role, Source
 
 
 def run_repl(orchestrator, session) -> None:
     proactive = Proactive(orchestrator.memory)
     name = _assistant_name(orchestrator)
+    speaker = Speaker(enabled=getattr(orchestrator, "voice_enabled", False))
     onboarding = getattr(orchestrator, "onboarding", None)
     n = _memory_count(orchestrator)
     print(f"\n  {name} — your personal intelligence layer")
@@ -60,6 +62,15 @@ def run_repl(orchestrator, session) -> None:
                 else:
                     print("I think I've got the basics — ask me anything.")
                 continue
+            if line in (":voice", ":voice on", ":voice off"):
+                on = None if line == ":voice" else line.endswith("on")
+                state = speaker.toggle(on)
+                if state and not speaker.available():
+                    print("Voice is on, but I couldn't find a TTS engine — "
+                          "install pyttsx3 (pip install pyttsx3) or espeak.")
+                else:
+                    print(f"Voice is {'on' if state else 'off'}.")
+                continue
             if line in (":briefing", ":brief"):
                 facts = proactive.briefing(session.active_scope)
                 if facts:
@@ -79,6 +90,7 @@ def run_repl(orchestrator, session) -> None:
                 print(f"  · {s['tool']}({_fmt_args(s['args'])}) → {_short(s['result'])}")
             via = _last_model(session)
             print(f"layer> {reply}" + (f"   [via {via}]" if via else ""))
+            speaker.speak(reply)
         except Exception as e:
             print("layer> Sorry — something went wrong on my side. Try again?")
             if os.environ.get("AGI_DEBUG"):
@@ -299,6 +311,7 @@ _HELP = (
     "  :seed                 load what we already know about you\n"
     "  :good / :bad          rate my last reply\n"
     "  :optimize             improve my routing from your feedback\n"
+    "  :voice on / off       speak my replies aloud (local TTS)\n"
     "  :status / :about      status / what this is\n"
     "  exit / quit           leave\n"
     "Otherwise just talk to me — ask a question or ask me to do something, and\n"

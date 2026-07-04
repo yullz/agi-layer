@@ -25,6 +25,13 @@ models:
     privacy: local
     cost: free
 
+  - name: echo
+    adapter: echo                # offline, zero-dependency fallback — runs with no key/Ollama
+    context_window: 8000
+    capabilities: []
+    privacy: local
+    cost: free
+
 defaults:
   hard_reasoning: claude-opus
   general: claude-sonnet

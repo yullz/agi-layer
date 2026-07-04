@@ -19,5 +19,9 @@ def run_repl(orchestrator, session) -> None:
             session.set_scope(line.split(" ", 1)[1].strip() or None)
             print(f"[scope -> {session.active_scope}]")
             continue
-        reply = orchestrator.handle_turn(line, session)
+        try:
+            reply = orchestrator.handle_turn(line, session)
+        except Exception as e:
+            print(f"[error] {type(e).__name__}: {e}")
+            continue
         print(f"layer> {reply}")

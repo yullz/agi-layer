@@ -9,9 +9,12 @@ class Reranker:
         self.model_name = model_name
 
     def rerank(self, query: str, candidates: list[RetrievalCandidate]) -> list[RetrievalCandidate]:
-        """Score each candidate against the query with a cross-encoder and
-        return them reordered. MUST degrade gracefully: if the model is
-        unavailable, return candidates unchanged rather than raising — the
-        pipeline is built to run without a reranker.
+        """Score each candidate against the query with a cross-encoder, set
+        cand.rerank_score (higher = more relevant) so the signal survives the
+        final re-sort, and return them reordered.
+
+        Phase 1: identity passthrough (no cross-encoder wired yet). Returning
+        candidates unchanged honours the graceful-degradation contract — the
+        pipeline runs with or without a real reranker.
         """
-        raise NotImplementedError("Wire a cross-encoder; see ARCHITECTURE.md (Read path)")
+        return candidates

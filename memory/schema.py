@@ -140,6 +140,7 @@ class RetrievalCandidate:
     created_at: float = field(default_factory=_now)
     token_estimate: int = 0
     fused_score: float = 0.0          # set by reciprocal rank fusion
+    rerank_score: float = 0.0         # set by a reranker (0 when none ran)
     final_score: float = 0.0          # fused x importance x recency, after rerank
 
 

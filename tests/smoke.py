@@ -197,6 +197,42 @@ def main() -> int:
     check("HTTP API builds or import-guards cleanly",
           _builds_or_guards(lambda: build_app(orch)))
 
+    # 9) background scheduler (APScheduler or stdlib-timer fallback)
+    print("\n9) background scheduler")
+    from core.scheduler import Scheduler
+    hits = {"n": 0}
+    sch = Scheduler(lambda: hits.__setitem__("n", hits["n"] + 1), interval_seconds=999)
+    backend = sch.start()
+    sch.run_now()
+    sch.stop()
+    check("scheduler.run_now triggers the job", hits["n"] >= 1)
+    check("scheduler starts on a backend", backend in ("apscheduler", "timer"))
+
+    # 10) graph auto-population from the write path
+    print("\n10) graph population from writes")
+    gmem, _gepi, _gsem = build_memory(os.path.join(tmp, "gpop"))
+    gsess = Session(scope="proj")
+    gsess.add_user("I deploy WhaleTrack using Docker and Fly.")
+    gsess.add_assistant("Noted.")
+    gmem.write(Turn.from_session(gsess))
+    gnb = gmem.graph.neighbors(["WhaleTrack"], scope="proj")
+    check("write path auto-populated the graph (co-occurrences)", len(gnb) >= 1)
+
+    # 11) GEPA optimizer (optional DSPy upgrade) import-guards cleanly
+    print("\n11) GEPA optimizer")
+    from improvement.gepa_optimizer import GEPAOptimizer
+    gepa = GEPAOptimizer()
+    ok_gepa = True
+    if not gepa.available():
+        try:
+            gepa.evolve_prompt("base", [])
+            ok_gepa = False
+        except RuntimeError:
+            ok_gepa = True
+        except Exception:
+            ok_gepa = False
+    check("GEPA optimizer available or import-guards cleanly", ok_gepa)
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

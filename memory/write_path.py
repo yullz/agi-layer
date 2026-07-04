@@ -79,3 +79,21 @@ class WritePipeline:
                 add_turn(turn.user_input, turn.assistant_reply, scope=turn.scope)
         except Exception:
             pass
+
+        # Populate the knowledge graph: extract entities and link co-occurrences.
+        try:
+            self._update_graph(turn)
+        except Exception:
+            pass
+
+    def _update_graph(self, turn: Turn) -> None:
+        if not hasattr(self.graph, "get_or_create_entity"):
+            return
+        from memory.extract import extract_entities
+        names = extract_entities(f"{turn.user_input} {turn.assistant_reply}")
+        if len(names) < 2:
+            return
+        ids = [self.graph.get_or_create_entity(n, scope=turn.scope) for n in names]
+        for i in range(len(ids)):
+            for j in range(i + 1, len(ids)):
+                self.graph.relate(ids[i], ids[j], "mentioned_with", scope=turn.scope)

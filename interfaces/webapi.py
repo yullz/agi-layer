@@ -22,6 +22,15 @@ def _fmt_args(args) -> str:
     return ", ".join(f"{k}={_short(v, 60)}" for k, v in (args or {}).items())
 
 
+def _safe_name(name: str) -> str:
+    """A filesystem-safe basename — no path traversal, no odd characters."""
+    import os
+    import re
+    base = os.path.basename(str(name)).strip() or "file"
+    base = re.sub(r"[^A-Za-z0-9._-]", "_", base)
+    return base[:80] or "file"
+
+
 class WebApp:
     def __init__(self, orchestrator):
         self.orch = orchestrator
@@ -47,27 +56,31 @@ class WebApp:
 
     # --- chat ---------------------------------------------------------------
     def chat(self, text: str, sid: str = "default", scope=None,
-             allow_actions: bool = True) -> dict:
+             allow_actions: bool = True, attachments=None) -> dict:
         text = (text or "").strip()
-        if not text:
+        attachments = attachments or []
+        if not text and not attachments:
             return {"reply": "", "steps": [], "model": None, "scope": scope}
         sess = self._session(sid, scope)
 
         # Onboarding first — same first-boot interview as the terminal. If a flow
         # is in progress this message is an answer; a brand-new user is offered it
         # on their first message; and anyone can ask for it in plain language.
+        # (Attachments don't participate in the interview.)
         ob = getattr(self.orch, "onboarding", None)
         if ob is not None:
             if sid in self._onb:
                 return self._onb_answer(sess, sid, text, ob)
-            if self._wants_onboarding(text):
-                return self._onb_start(sess, sid, ob, rerun=ob.is_done())
-            if not ob.is_done() and sid not in self._onb_seen:
-                return self._onb_start(sess, sid, ob, rerun=False)
+            if not attachments:
+                if self._wants_onboarding(text):
+                    return self._onb_start(sess, sid, ob, rerun=ob.is_done())
+                if not ob.is_done() and sid not in self._onb_seen:
+                    return self._onb_start(sess, sid, ob, rerun=False)
 
+        aug_text, images = self._ingest_attachments(text, attachments)
         confirm = (lambda *_a: True) if allow_actions else None
         try:
-            reply = self.orch.handle_turn(text, sess, confirm=confirm)
+            reply = self.orch.handle_turn(aug_text, sess, confirm=confirm, images=images)
         except Exception:
             reply = "Sorry — something went wrong on my side. Try again?"
         steps = [{"tool": s.get("tool"), "args": _fmt_args(s.get("args")),
@@ -84,6 +97,82 @@ class WebApp:
                 mn = getattr(m, "model", None)
                 return None if not mn else ("echo · offline" if mn == "echo" else mn)
         return None
+
+    # --- attachments (files + images) ---------------------------------------
+    def _vision_available(self, text) -> bool:
+        try:
+            m = self.orch.router.pick(text or " ", None)
+            return bool(getattr(m, "supports_vision", False))
+        except Exception:
+            return False
+
+    def _ingest_attachments(self, text, attachments):
+        """Fold attachments into the turn: text/document files become prompt
+        context (any model can read them); images are passed to a vision model if
+        one is active, else noted. Everything is saved under data/uploads/ so the
+        file tools can reach it later. Returns (augmented_text, images|None)."""
+        if not attachments:
+            return text, None
+        vision = self._vision_available(text)
+        updir = self._uploads_dir()
+        extras, images = [], []
+        for i, a in enumerate(attachments):
+            name = _safe_name(a.get("name") or f"file{i + 1}")
+            mime = str(a.get("mime") or "").lower()
+            content = a.get("content") or ""
+            is_image = a.get("kind") == "image" or mime.startswith("image/")
+            b64 = content.split(";base64,", 1)[1] if ";base64," in content else ""
+            saved = self._save_upload(updir, name, (b64 or content), bool(b64))
+            where = f" (saved to {saved})" if saved else ""
+            if is_image:
+                if vision and b64:
+                    images.append({"mime": mime or "image/png", "b64": b64})
+                    extras.append(f"[Attached image: {name}]")
+                else:
+                    extras.append(f"[Attached image: {name}{where} — I can't view images "
+                                  "with the current model; switch to a vision model to analyse it.]")
+            else:
+                body = content
+                if body.startswith("data:") and ";base64," in body:
+                    import base64 as _b64
+                    try:
+                        body = _b64.b64decode(b64).decode("utf-8", "replace")
+                    except Exception:
+                        body = ""
+                extras.append(f"[Attached file: {name}]\n{str(body)[:8000]}")
+        aug = (text + "\n\n" + "\n\n".join(extras)).strip() if extras else text
+        return aug, (images or None)
+
+    def _uploads_dir(self):
+        import os
+        data_dir = getattr(self.orch, "data_dir", None)
+        if not data_dir:
+            return None
+        path = os.path.join(str(data_dir), "uploads")
+        try:
+            os.makedirs(path, exist_ok=True)
+            return path
+        except Exception:
+            return None
+
+    def _save_upload(self, updir, name, payload, is_binary) -> str:
+        if not updir or not payload:
+            return ""
+        import base64 as _b64
+        import os
+        import time
+        fname = f"{int(time.time())}-{name}"
+        path = os.path.join(updir, fname)
+        try:
+            if is_binary:
+                with open(path, "wb") as f:
+                    f.write(_b64.b64decode(payload))
+            else:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(str(payload)[:2_000_000])
+            return os.path.join("uploads", fname)
+        except Exception:
+            return ""
 
     # --- onboarding (parity with the terminal's first-boot interview) --------
     _ONB_TRIGGERS = (

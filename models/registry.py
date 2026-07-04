@@ -53,6 +53,10 @@ class ModelRegistry:
                     continue
             except Exception:
                 continue
+            # Advertise vision from the entry's capabilities, unless the adapter
+            # already declares its own (e.g. a backend that can't accept images).
+            if not hasattr(adapter, "supports_vision"):
+                adapter.supports_vision = "vision" in set(entry.get("capabilities", []))
             self._meta[name] = entry
             self._adapters[name] = adapter
 

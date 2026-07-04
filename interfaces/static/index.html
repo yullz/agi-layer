@@ -99,6 +99,14 @@
   /* Composer */
   .composer{border-top:1px solid var(--line);padding:14px 0 18px;background:var(--bg)}
   .cbar{max-width:760px;margin:0 auto;padding:0 22px}
+  .attachRow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+  .attachRow:empty{display:none}
+  .att-chip{display:flex;align-items:center;gap:7px;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;padding:5px 8px;font-size:13px;max-width:220px}
+  .att-chip img{width:34px;height:34px;object-fit:cover;border-radius:7px}
+  .att-chip .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .att-chip .x{cursor:pointer;color:var(--muted);font-weight:700;padding:0 2px}
+  .att-chip .x:hover{color:var(--text)}
   .inputrow{display:flex;align-items:flex-end;gap:10px;background:var(--panel);
     border:1px solid var(--line);border-radius:18px;padding:8px 8px 8px 16px;transition:.15s}
   .inputrow:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,92,255,.14)}
@@ -199,7 +207,11 @@
       </div>
       <div class="composer">
         <div class="cbar">
+          <div class="attachRow" id="attachRow"></div>
           <div class="inputrow">
+            <button class="mic" id="attachBtn" title="Attach files or images">📎</button>
+            <input type="file" id="fileInput" multiple
+                   accept="image/*,text/*,.txt,.md,.csv,.json,.log,.py,.js,.ts,.html,.css,.yaml,.yml,.xml">
             <textarea id="input" rows="1" placeholder="Message Myro…"></textarea>
             <button class="mic" id="micBtn" title="Talk to me">🎤</button>
             <button class="send" id="sendBtn" title="Send">➤</button>
@@ -362,6 +374,29 @@ input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventD
 $('#sendBtn').onclick=send;
 $$('#starterChips .chip').forEach(c=>c.onclick=()=>{input.value=c.dataset.q;send();});
 
+/* ---- attachments ---- */
+let PENDING=[];   // {name, mime, kind:'text'|'image', content}
+const MAX_ATT=8*1024*1024;
+if($('#attachBtn'))$('#attachBtn').onclick=()=>$('#fileInput')?.click();
+if($('#fileInput'))$('#fileInput').onchange=e=>{addFiles(e.target.files);e.target.value='';};
+function addFiles(files){
+  [...(files||[])].forEach(f=>{
+    if(f.size>MAX_ATT){toast(f.name+' is too big (8 MB max).');return;}
+    const isImg=(f.type||'').startsWith('image/');
+    const r=new FileReader();
+    r.onload=()=>{PENDING.push({name:f.name,mime:f.type||'',kind:isImg?'image':'text',content:r.result});renderAtt();};
+    isImg?r.readAsDataURL(f):r.readAsText(f);
+  });
+}
+function renderAtt(){
+  const row=$('#attachRow');if(!row)return;
+  row.innerHTML=PENDING.map((a,i)=>{
+    const thumb=a.kind==='image'?`<img src="${a.content}" alt="">`:'📄';
+    return `<span class="att-chip">${thumb}<span class="nm">${esc(a.name)}</span><span class="x" data-i="${i}">✕</span></span>`;
+  }).join('');
+  row.querySelectorAll('.x').forEach(x=>x.onclick=()=>{PENDING.splice(+x.dataset.i,1);renderAtt();});
+}
+
 function addMsg(role,html){
   $('#welcome')?.remove();
   const el=document.createElement('div');el.className='msg '+(role==='me'?'me':'myro');
@@ -371,12 +406,18 @@ function addMsg(role,html){
 function scrollDown(){const s=$('#chatScroll');s.scrollTop=s.scrollHeight;}
 
 async function send(){
-  const text=input.value.trim(); if(!text||busy)return;
+  const text=input.value.trim();
+  const atts=PENDING.slice();
+  if((!text&&!atts.length)||busy)return;
   input.value='';input.style.height='auto';
-  addMsg('me',md(text));
+  PENDING=[];renderAtt();
+  let mine=md(text);
+  if(atts.length)mine+='<div class="steps">'+atts.map(a=>
+    `<div class="step"><span>${a.kind==='image'?'🖼️':'📄'}</span><span>${esc(a.name)}</span></div>`).join('')+'</div>';
+  addMsg('me',mine);
   busy=true;$('#sendBtn').disabled=true;
   const typing=addMsg('myro','<div class="typing"><i></i><i></i><i></i></div>');
-  const res=await api('chat',{text,sid:SID,scope:null,allow_actions:ACTIONS});
+  const res=await api('chat',{text,sid:SID,scope:null,allow_actions:ACTIONS,attachments:atts});
   typing.remove();
   if(res.error){addMsg('myro','⚠️ '+esc(res.error));busy=false;$('#sendBtn').disabled=false;return;}
   let inner=md(res.reply||'');

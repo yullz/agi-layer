@@ -85,12 +85,20 @@ Here's the full toolbox:
 | 🐙 **GitHub & code** | Show recent activity, issues, PRs · open an issue 🔒 · read your git history | *"What issues are open on my repo?"* · *"Open an issue: login button is broken"* |
 | 🌐 **The web** | Search · read a page · browse & click through sites | *"Search for the best budget laptops 2026"* · *"Read this article and summarize it"* |
 | 📂 **Your files** | List a folder · read a file · write one 🔒 | *"What's in my Documents folder?"* · *"Save these notes to ideas.txt"* |
+| 📎 **Attach & send** | Attach files or images in the chat (📎 button) | *attach a document → "summarize this"* · *attach a photo → "what's in this image?"* |
 | ⚡ **Quick stuff** | Do math · tell the time/date | *"What's 18% of 240?"* · *"What time is it?"* |
 | 🔔 **Reach you** | Send a notification to your phone | *"Remind my phone to leave at 5"* |
 
 *(Anything with a 🔒 asks for your confirmation first. Some tools — email,
 GitHub — need a quick one-time setup with your account details; see
 [docs/SETUP.md](./docs/SETUP.md).)*
+
+> **About attachments:** text files (documents, code, CSV…) always work — their
+> contents go straight into the conversation for any brain. For Myro to actually
+> *see* an **image**, the active model has to support vision — **Claude** does,
+> or a local vision model in Ollama (e.g. `ollama pull llava`, then mark it
+> `vision` in `config/models.yaml`). With a text-only model he'll note the image
+> but can't look inside it. Everything you attach is saved under `data/uploads/`.
 
 ### 4. ⏰ Runs on a schedule (automations)
 

@@ -134,9 +134,10 @@ class Agent:
 
 
 def _last_user(messages) -> str:
+    from models.multimodal import text_of
     for m in reversed(messages or []):
         if m.get("role") == "user":
-            return str(m.get("content", ""))
+            return text_of(m.get("content", ""))
     return ""
 
 

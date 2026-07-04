@@ -19,6 +19,10 @@ is_local = False  # external provider — never used for sensitive scopes
 class AgentSDKModel:
     is_local = False
 
+    # This SDK path sends text to `query()`; it doesn't forward image blocks, so
+    # don't advertise vision (attached images degrade to a text note instead).
+    supports_vision = False
+
     def __init__(self, name: str, model: str | None = None, **opts):
         self.model_name = name
         self.model = model  # optional explicit Claude model id; None = plan default
@@ -77,13 +81,14 @@ def _apply_effort(system: str, effort) -> str:
 
 def _split(prompt):
     """Turn a messages list into (system_text, single_user_prompt) for the SDK."""
+    from models.multimodal import text_of
     if isinstance(prompt, str):
         return "", prompt
     systems, convo = [], []
     for m in prompt if isinstance(prompt, list) else []:
         if not isinstance(m, dict):
             continue
-        role, content = m.get("role"), str(m.get("content", ""))
+        role, content = m.get("role"), text_of(m.get("content", ""))
         if role == "system":
             systems.append(content)
         elif role == "assistant":

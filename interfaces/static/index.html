@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Myro</title>
+<style>
+  :root{
+    --bg:#0e1016; --bg2:#151822; --panel:#191d29; --panel2:#1f2431; --line:#2a3040;
+    --text:#e8eaf0; --muted:#9aa2b4; --accent:#7c5cff; --accent2:#a78bfa;
+    --user:#6d5cff; --good:#3ecf8e; --warn:#f7b955; --danger:#ff6b6b;
+    --shadow:0 10px 40px rgba(0,0,0,.35); --radius:16px;
+  }
+  :root[data-theme="light"]{
+    --bg:#f6f7fb; --bg2:#eef0f6; --panel:#ffffff; --panel2:#f2f3f9; --line:#e3e6ef;
+    --text:#1a1d27; --muted:#666e82; --accent:#6d4bff; --accent2:#8b5cf6;
+    --user:#6d4bff; --shadow:0 10px 30px rgba(30,30,60,.10);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  input,textarea{font-family:inherit;font-size:15px}
+  .app{display:flex;height:100vh}
+
+  /* Sidebar */
+  .side{width:230px;flex:0 0 230px;background:var(--bg2);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;padding:16px 12px;gap:4px}
+  .brand{display:flex;align-items:center;gap:11px;padding:6px 8px 16px}
+  .avatar{width:38px;height:38px;border-radius:12px;flex:0 0 38px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:grid;place-items:center;font-weight:700;color:#fff;font-size:19px;
+    box-shadow:0 4px 14px rgba(124,92,255,.45)}
+  .brand h1{margin:0;font-size:17px;font-weight:650;letter-spacing:.2px}
+  .brand .sub{font-size:11.5px;color:var(--muted);margin-top:1px}
+  .nav{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+  .nav button{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:11px;
+    color:var(--muted);font-size:14.5px;font-weight:500;transition:.15s;text-align:left;width:100%}
+  .nav button:hover{background:var(--panel);color:var(--text)}
+  .nav button.active{background:var(--panel);color:var(--text)}
+  .nav button.active .ic{filter:grayscale(0);opacity:1}
+  .ic{font-size:17px;width:20px;text-align:center;opacity:.85}
+  .side .foot{margin-top:auto;display:flex;align-items:center;gap:8px;padding:8px;color:var(--muted);font-size:12px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 8px}
+  .dot.on{background:var(--good);box-shadow:0 0 8px var(--good)}
+
+  /* Main */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{height:58px;flex:0 0 58px;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;gap:12px;padding:0 20px;background:var(--bg)}
+  .topbar .title{font-weight:600;font-size:16px}
+  .pill{font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--line);
+    padding:4px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:6px}
+  .pill.on{color:var(--good)} .spacer{flex:1}
+  .iconbtn{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+    color:var(--muted);font-size:16px;transition:.15s}
+  .iconbtn:hover{background:var(--panel);color:var(--text)}
+
+  .view{flex:1;overflow:hidden;display:none;flex-direction:column}
+  .view.active{display:flex}
+
+  /* Chat */
+  #chatScroll{flex:1;overflow-y:auto;padding:26px 0}
+  .wrap{max-width:760px;margin:0 auto;padding:0 22px}
+  .msg{display:flex;gap:12px;margin:0 0 20px}
+  .msg .who{width:30px;height:30px;border-radius:9px;flex:0 0 30px;display:grid;place-items:center;
+    font-size:14px;font-weight:700;margin-top:2px}
+  .msg.me{flex-direction:row-reverse}
+  .msg.me .who{background:var(--user);color:#fff}
+  .msg.myro .who{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+  .bubble{max-width:78%;padding:11px 15px;border-radius:15px;background:var(--panel);
+    border:1px solid var(--line);white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere}
+  .msg.me .bubble{background:var(--user);border-color:transparent;color:#fff;border-bottom-right-radius:5px}
+  .msg.myro .bubble{border-bottom-left-radius:5px}
+  .bubble code{background:var(--panel2);padding:1px 6px;border-radius:6px;font-size:13px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .meta{font-size:11px;color:var(--muted);margin-top:6px}
+  .steps{margin-top:9px;display:flex;flex-direction:column;gap:5px}
+  .step{font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);
+    border-radius:9px;padding:6px 10px;display:flex;gap:7px;align-items:flex-start}
+  .step.denied{border-color:var(--warn);color:var(--warn)}
+  .step b{color:var(--text);font-weight:600}
+  .typing{display:inline-flex;gap:4px;padding:4px 2px}
+  .typing i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:bl 1.2s infinite}
+  .typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+  @keyframes bl{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+  .empty{max-width:620px;margin:8vh auto;text-align:center;color:var(--muted);padding:0 20px}
+  .empty .big{width:64px;height:64px;border-radius:20px;margin:0 auto 18px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;
+    font-size:32px;font-weight:700;color:#fff;box-shadow:var(--shadow)}
+  .empty h2{color:var(--text);margin:0 0 8px;font-size:22px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:20px}
+  .chip{background:var(--panel);border:1px solid var(--line);padding:9px 14px;border-radius:12px;
+    font-size:13.5px;color:var(--text);transition:.15s}
+  .chip:hover{border-color:var(--accent);transform:translateY(-1px)}
+
+  /* Composer */
+  .composer{border-top:1px solid var(--line);padding:14px 0 18px;background:var(--bg)}
+  .cbar{max-width:760px;margin:0 auto;padding:0 22px}
+  .inputrow{display:flex;align-items:flex-end;gap:10px;background:var(--panel);
+    border:1px solid var(--line);border-radius:18px;padding:8px 8px 8px 16px;transition:.15s}
+  .inputrow:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,92,255,.14)}
+  .inputrow textarea{flex:1;background:none;border:none;color:var(--text);resize:none;outline:none;
+    max-height:160px;padding:6px 0;min-height:24px}
+  .send{width:38px;height:38px;border-radius:12px;flex:0 0 38px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:16px;transition:.15s}
+  .send:hover{filter:brightness(1.1)} .send:disabled{opacity:.4;cursor:default}
+  .mic{width:38px;height:38px;border-radius:12px;flex:0 0 38px;display:grid;place-items:center;
+    color:var(--muted);font-size:17px}
+  .mic:hover{background:var(--panel2);color:var(--text)} .mic.rec{color:var(--danger);animation:pulse 1s infinite}
+  @keyframes pulse{50%{opacity:.5}}
+  .toggles{display:flex;gap:14px;justify-content:flex-end;margin-top:9px;font-size:12px;color:var(--muted)}
+  .tg{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+  .sw{width:30px;height:17px;border-radius:20px;background:var(--line);position:relative;transition:.15s}
+  .sw::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;
+    background:#fff;transition:.15s}
+  .tg.on .sw{background:var(--accent)} .tg.on .sw::after{left:15px}
+
+  /* Panels (memory/routines/connectors/profile) */
+  .panel-view{flex:1;overflow-y:auto;padding:26px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:14px}
+  .card h3{margin:0 0 4px;font-size:15px}.card .hint{color:var(--muted);font-size:12.5px;margin-bottom:12px}
+  .row{display:flex;gap:9px;flex-wrap:wrap}
+  .field{flex:1;min-width:160px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;
+    padding:10px 13px;color:var(--text);outline:none}
+  .field:focus{border-color:var(--accent)}
+  .btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;padding:10px 16px;
+    border-radius:11px;font-weight:600;font-size:14px;transition:.15s}
+  .btn:hover{filter:brightness(1.08)} .btn.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+  .list{display:flex;flex-direction:column;gap:9px}
+  .item{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .item .h{display:flex;align-items:center;gap:10px;justify-content:space-between}
+  .item .name{font-weight:600}.item .sched{font-size:11.5px;color:var(--accent2)}
+  .item .task{color:var(--muted);font-size:13px;margin-top:4px}
+  .sbtn{background:var(--panel);border:1px solid var(--line);padding:6px 11px;border-radius:9px;font-size:12.5px;color:var(--text)}
+  .sbtn:hover{border-color:var(--accent)}
+  .kv{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .kv:last-child{border:none}.kv .k{color:var(--muted)}
+  .stat{display:flex;align-items:center;gap:9px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .stat:last-child{border:none} .stat .mk{font-size:15px}
+  .muted{color:var(--muted)} .mb{margin-bottom:14px}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel2);
+    border:1px solid var(--line);padding:11px 18px;border-radius:12px;box-shadow:var(--shadow);
+    font-size:13.5px;opacity:0;pointer-events:none;transition:.25s;z-index:50}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+  ::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+
+  @media(max-width:720px){
+    .side{position:fixed;left:0;top:0;bottom:0;z-index:40;transform:translateX(-100%);transition:.2s;box-shadow:var(--shadow)}
+    .side.open{transform:none}.menu{display:grid !important}
+  }
+  .menu{display:none}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand">
+      <div class="avatar" id="avatarLetter">M</div>
+      <div><h1 id="brandName">Myro</h1><div class="sub">personal intelligence</div></div>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-view="chat" class="active"><span class="ic">💬</span> Chat</button>
+      <button data-view="memory"><span class="ic">🧠</span> Memory</button>
+      <button data-view="routines"><span class="ic">⏰</span> Routines</button>
+      <button data-view="connectors"><span class="ic">🔌</span> Connectors</button>
+      <button data-view="profile"><span class="ic">⚙️</span> Settings</button>
+    </nav>
+    <div class="foot"><span class="dot" id="statusDot"></span><span id="statusText">connecting…</span></div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="iconbtn menu" id="menuBtn">☰</button>
+      <span class="title" id="viewTitle">Chat</span>
+      <span class="spacer"></span>
+      <span class="pill" id="scopePill" title="Active scope">🌐 global</span>
+      <span class="pill" id="modelPill">…</span>
+      <button class="iconbtn" id="themeBtn" title="Theme">🌗</button>
+    </div>
+
+    <!-- CHAT -->
+    <section class="view active" id="view-chat">
+      <div id="chatScroll">
+        <div class="wrap" id="messages"></div>
+        <div class="empty" id="welcome">
+          <div class="big">M</div>
+          <h2>Hi, I'm <span id="welName">Myro</span>.</h2>
+          <div>Ask me anything, or ask me to do something. I remember what matters to you.</div>
+          <div class="chips" id="starterChips">
+            <button class="chip" data-q="What do you know about me?">What do you know about me?</button>
+            <button class="chip" data-q="What's on my calendar this week?">What's on my calendar?</button>
+            <button class="chip" data-q="Summarize the latest AI news">Summarize AI news</button>
+            <button class="chip" data-q="What can you do?">What can you do?</button>
+          </div>
+        </div>
+      </div>
+      <div class="composer">
+        <div class="cbar">
+          <div class="inputrow">
+            <textarea id="input" rows="1" placeholder="Message Myro…"></textarea>
+            <button class="mic" id="micBtn" title="Talk to me">🎤</button>
+            <button class="send" id="sendBtn" title="Send">➤</button>
+          </div>
+          <div class="toggles">
+            <span class="tg on" id="actToggle" title="Let Myro take actions (write files, send, run). Everything is shown & audited.">
+              <span class="sw"></span> Actions</span>
+            <span class="tg" id="speakToggle" title="Speak replies aloud">
+              <span class="sw"></span> 🔊 Speak</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MEMORY -->
+    <section class="view" id="view-memory">
+      <div class="panel-view"><div class="wrap">
+        <div class="card">
+          <h3>Tell me something to remember</h3>
+          <div class="hint">Stored durably and privately, and I'll recall it later.</div>
+          <div class="row"><input class="field" id="memAdd" placeholder="e.g. My manager is Dana, we sync Tuesdays.">
+            <button class="btn" id="memAddBtn">Remember</button></div>
+        </div>
+        <div class="card">
+          <h3>What I remember</h3>
+          <div class="row mb"><input class="field" id="memQ" placeholder="Search my memory…">
+            <button class="btn ghost" id="memSearchBtn">Search</button></div>
+          <div class="list" id="memList"><div class="muted">Loading…</div></div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ROUTINES -->
+    <section class="view" id="view-routines">
+      <div class="panel-view"><div class="wrap">
+        <div class="card">
+          <h3>Create a routine</h3>
+          <div class="hint">A saved task I can run on demand or on a schedule.</div>
+          <div class="row mb"><input class="field" id="rName" placeholder="name (e.g. morning)" style="max-width:170px">
+            <input class="field" id="rTask" placeholder="what should I do?"></div>
+          <div class="row"><button class="btn" id="rAddBtn">Save routine</button>
+            <button class="btn ghost" id="rStartersBtn">Install starter routines</button></div>
+        </div>
+        <div class="card">
+          <h3>Your routines</h3>
+          <div class="hint">Schedule examples: <code>every 30m</code> · <code>at 08:00</code> · <code>at workstart</code> · <code>off</code></div>
+          <div class="list" id="rList"><div class="muted">Loading…</div></div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- CONNECTORS -->
+    <section class="view" id="view-connectors">
+      <div class="panel-view"><div class="wrap">
+        <div class="card">
+          <h3>Connectors</h3>
+          <div class="hint">What I can read from your world. Configure via env vars (see setup).</div>
+          <div id="connList"><div class="muted">Loading…</div></div>
+        </div>
+        <div class="card">
+          <h3>Tools I can use</h3>
+          <div id="toolList" class="list"><div class="muted">Loading…</div></div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- PROFILE -->
+    <section class="view" id="view-profile">
+      <div class="panel-view"><div class="wrap">
+        <div class="card">
+          <h3>About you</h3>
+          <div class="hint">I use your timezone and working hours so scheduling lines up with your day.</div>
+          <div class="row mb"><input class="field" id="pName" placeholder="Your name"></div>
+          <div class="row mb"><input class="field" id="pTz" placeholder="Timezone (e.g. Europe/Berlin)">
+            <input class="field" id="pHours" placeholder="Working hours (e.g. 9am-6pm)"></div>
+          <button class="btn" id="pSaveBtn">Save</button>
+        </div>
+        <div class="card">
+          <h3>Status</h3>
+          <div id="profStatus"></div>
+        </div>
+        <div class="card">
+          <h3>Appearance</h3>
+          <div class="kv"><span class="k">Theme</span>
+            <button class="sbtn" id="themeBtn2">Toggle light / dark</button></div>
+        </div>
+      </div></div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=(s,e=document)=>e.querySelector(s), $$=(s,e=document)=>[...e.querySelectorAll(s)];
+const SID = localStorage.getItem('myroSid') || (()=>{const v='s'+Math.random().toString(36).slice(2);localStorage.setItem('myroSid',v);return v;})();
+let SPEAK = localStorage.getItem('myroSpeak')==='1';
+let ACTIONS = localStorage.getItem('myroActions')!=='0';
+let busy=false, name='Myro';
+
+async function api(path, body){
+  const opt = body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {};
+  try{ const r = await fetch('/api/'+path, opt); return await r.json(); }
+  catch(e){ return {error:String(e)}; }
+}
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function md(s){return esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');}
+
+/* ---- navigation ---- */
+$$('#nav button').forEach(b=>b.onclick=()=>showView(b.dataset.view));
+function showView(v){
+  $$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
+  $$('.view').forEach(s=>s.classList.toggle('active',s.id==='view-'+v));
+  $('#viewTitle').textContent=({chat:'Chat',memory:'Memory',routines:'Routines',connectors:'Connectors',profile:'Settings'})[v];
+  $('#side').classList.remove('open');
+  if(v==='memory')loadMemory(); if(v==='routines')loadRoutines();
+  if(v==='connectors')loadConnectors(); if(v==='profile')loadProfile();
+}
+$('#menuBtn').onclick=()=>$('#side').classList.toggle('open');
+
+/* ---- theme ---- */
+function setTheme(t){document.documentElement.dataset.theme=t;localStorage.setItem('myroTheme',t);}
+$('#themeBtn').onclick=$('#themeBtn2') && (()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark'));
+$('#themeBtn').onclick=()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+if($('#themeBtn2'))$('#themeBtn2').onclick=()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+setTheme(localStorage.getItem('myroTheme')||'dark');
+
+/* ---- toggles ---- */
+function syncToggles(){$('#actToggle').classList.toggle('on',ACTIONS);$('#speakToggle').classList.toggle('on',SPEAK);}
+$('#actToggle').onclick=()=>{ACTIONS=!ACTIONS;localStorage.setItem('myroActions',ACTIONS?'1':'0');syncToggles();toast(ACTIONS?'Actions on — I can do things for you.':'Read-only — I won\'t write or send.');};
+$('#speakToggle').onclick=()=>{SPEAK=!SPEAK;localStorage.setItem('myroSpeak',SPEAK?'1':'0');syncToggles();if(!SPEAK)speechSynthesis.cancel();};
+syncToggles();
+
+/* ---- chat ---- */
+const input=$('#input'), messages=$('#messages');
+input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,160)+'px';});
+input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+$('#sendBtn').onclick=send;
+$$('#starterChips .chip').forEach(c=>c.onclick=()=>{input.value=c.dataset.q;send();});
+
+function addMsg(role,html){
+  $('#welcome')?.remove();
+  const el=document.createElement('div');el.className='msg '+(role==='me'?'me':'myro');
+  el.innerHTML=`<div class="who">${role==='me'?'You':'M'}</div><div><div class="bubble">${html}</div></div>`;
+  messages.appendChild(el);scrollDown();return el;
+}
+function scrollDown(){const s=$('#chatScroll');s.scrollTop=s.scrollHeight;}
+
+async function send(){
+  const text=input.value.trim(); if(!text||busy)return;
+  input.value='';input.style.height='auto';
+  addMsg('me',md(text));
+  busy=true;$('#sendBtn').disabled=true;
+  const typing=addMsg('myro','<div class="typing"><i></i><i></i><i></i></div>');
+  const res=await api('chat',{text,sid:SID,scope:null,allow_actions:ACTIONS});
+  typing.remove();
+  if(res.error){addMsg('myro','⚠️ '+esc(res.error));busy=false;$('#sendBtn').disabled=false;return;}
+  let inner=md(res.reply||'');
+  if(res.steps&&res.steps.length){
+    inner+='<div class="steps">'+res.steps.map(s=>
+      `<div class="step${s.denied?' denied':''}"><span>${s.denied?'🔒':'⚙️'}</span><span><b>${esc(s.tool)}</b>(${esc(s.args)}) → ${esc(s.result)}</span></div>`).join('')+'</div>';
+  }
+  if(res.model)inner+=`<div class="meta">via ${esc(res.model)}</div>`;
+  const el=addMsg('myro',inner);
+  if(SPEAK&&res.reply)speak(res.reply);
+  busy=false;$('#sendBtn').disabled=false;input.focus();
+  refreshStatus();
+}
+
+/* ---- voice: browser Web Speech API (no install needed) ---- */
+function speak(t){try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t.slice(0,600));u.rate=1.02;speechSynthesis.speak(u);}catch(e){}}
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null;
+$('#micBtn').onclick=()=>{
+  if(!SR){toast('Voice input needs Chrome or Edge.');return;}
+  if(rec){rec.stop();return;}
+  rec=new SR();rec.lang='en-US';rec.interimResults=false;
+  $('#micBtn').classList.add('rec');
+  rec.onresult=e=>{input.value=e.results[0][0].transcript;send();};
+  rec.onend=()=>{$('#micBtn').classList.remove('rec');rec=null;};
+  rec.onerror=()=>{$('#micBtn').classList.remove('rec');rec=null;};
+  rec.start();
+};
+
+/* ---- status ---- */
+async function refreshStatus(){
+  const s=await api('status?sid='+SID);
+  if(s.error){$('#statusText').textContent='offline';return;}
+  name=s.name||'Myro';
+  $('#brandName').textContent=name;$('#welName').textContent=name;$('#avatarLetter').textContent=name[0]||'M';
+  $('#modelPill').textContent=s.model;
+  $('#modelPill').classList.toggle('on',!/offline/.test(s.model));
+  $('#scopePill').textContent='🌐 '+(s.scope||'global');
+  $('#statusText').textContent=s.memory+' memories · '+s.model;
+  $('#statusDot').classList.toggle('on',!/offline/.test(s.model));
+  document.title=name;
+}
+
+/* ---- memory ---- */
+async function loadMemory(q){
+  const r=await api('memory?q='+encodeURIComponent(q||'')+'&sid='+SID);
+  const list=$('#memList');
+  if(!r.items||!r.items.length){list.innerHTML='<div class="muted">Nothing yet. Tell me something above.</div>';return;}
+  list.innerHTML=r.items.map(x=>`<div class="item">${esc(x)}</div>`).join('');
+}
+$('#memSearchBtn').onclick=()=>loadMemory($('#memQ').value);
+$('#memQ').addEventListener('keydown',e=>{if(e.key==='Enter')loadMemory($('#memQ').value);});
+$('#memAddBtn').onclick=async()=>{const v=$('#memAdd').value.trim();if(!v)return;await api('remember',{fact:v});$('#memAdd').value='';toast('Got it — I\'ll remember that.');loadMemory();};
+
+/* ---- routines ---- */
+async function loadRoutines(){
+  const r=await api('routines');const list=$('#rList');
+  if(!r.routines||!r.routines.length){list.innerHTML='<div class="muted">No routines yet. Create one, or install the starters.</div>';return;}
+  list.innerHTML=r.routines.map(rt=>`
+    <div class="item">
+      <div class="h"><span class="name">${esc(rt.name)}</span>
+        <span>${rt.schedule?`<span class="sched">⏰ ${esc(rt.schedule)}</span> `:''}
+        <button class="sbtn" onclick="runRoutine('${esc(rt.name)}')">Run</button></span></div>
+      <div class="task">${esc(rt.task)}</div>
+      <div class="row" style="margin-top:9px">
+        <input class="field" id="sch-${esc(rt.name)}" placeholder="at 08:00 · every 30m · at workstart · off" style="padding:7px 11px">
+        <button class="sbtn" onclick="schedRoutine('${esc(rt.name)}')">Schedule</button></div>
+      ${rt.last?`<div class="meta" style="margin-top:8px">last: ${esc(rt.last)}</div>`:''}
+    </div>`).join('');
+}
+window.runRoutine=async n=>{toast('Running '+n+'…');const r=await api('routines/run',{name:n});toast(r.answer||'Done.');};
+window.schedRoutine=async n=>{const v=$('#sch-'+n).value.trim();if(!v)return;const r=await api('routines/schedule',{name:n,spec:v});toast(r.message||'Scheduled.');loadRoutines();};
+$('#rAddBtn').onclick=async()=>{const n=$('#rName').value.trim(),t=$('#rTask').value.trim();if(!n||!t)return;await api('routines/add',{name:n,task:t});$('#rName').value='';$('#rTask').value='';toast('Routine saved.');loadRoutines();};
+$('#rStartersBtn').onclick=async()=>{const r=await api('starters',{});toast((r.added&&r.added.length)?('Added: '+r.added.join(', ')):'Starters already installed.');loadRoutines();};
+
+/* ---- connectors + tools ---- */
+async function loadConnectors(){
+  const c=await api('connectors');const el=$('#connList');
+  const st=c.status||{};const keys=Object.keys(st);
+  el.innerHTML=keys.length?keys.map(k=>{const ok=/^ok/.test(st[k]);
+    return `<div class="stat"><span class="mk">${ok?'✅':'▫️'}</span><span><b>${esc(k)}</b> — <span class="muted">${esc(st[k])}</span></span></div>`;}).join('')
+    :'<div class="muted">Connectors are off.</div>';
+  const t=await api('tools');const tl=$('#toolList');
+  tl.innerHTML=(t.tools||[]).map(x=>`<div class="stat"><span class="mk">${x.gated?'🔒':'⚡'}</span><span><b>${esc(x.name)}</b> <span class="muted">— ${esc(x.description)}</span></span></div>`).join('');
+}
+
+/* ---- profile ---- */
+async function loadProfile(){
+  const p=await api('profile');
+  $('#pName').value=p.name||'';$('#pTz').value=(p.timezone==='system local'?'':p.timezone)||'';
+  $('#pHours').value=(p.work_start&&p.work_end)?`${p.work_start}-${p.work_end}`:'';
+  $('#profStatus').innerHTML=`
+    <div class="kv"><span class="k">Model</span><span>${esc(p.model)}</span></div>
+    <div class="kv"><span class="k">Timezone</span><span>${esc(p.timezone)} · ${esc(p.local_time)}</span></div>
+    <div class="kv"><span class="k">Working hours</span><span>${p.work_start?esc(p.work_start+' – '+p.work_end):'not set'}</span></div>`;
+}
+$('#pSaveBtn').onclick=async()=>{
+  await api('profile',{name:$('#pName').value.trim(),timezone:$('#pTz').value.trim(),hours:$('#pHours').value.trim()});
+  toast('Saved.');loadProfile();refreshStatus();
+};
+
+refreshStatus();setInterval(refreshStatus,20000);input.focus();
+</script>
+</body>
+</html>

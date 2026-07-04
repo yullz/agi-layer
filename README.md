@@ -10,9 +10,9 @@ It **runs today**, fully offline, with zero external services. Real models and
 embeddings light it up further — nothing is required to start.
 
 ```bash
-python main.py        # first boot: Myro asks a few questions to get to know you,
-                      # then just talk to him — ask, or ask him to do things
-python tests/smoke.py # 169 offline checks prove the whole spine
+python main.py                          # terminal: first boot asks a few questions, then chat
+AGI_INTERFACE=api python main.py        # or open the browser app (double-click Myro.bat on Windows)
+python tests/smoke.py                   # 178 offline checks prove the whole spine
 ```
 
 Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
@@ -63,9 +63,12 @@ Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
   tool, so a scheduled briefing lands on your phone), and lets you **text him**
   from anywhere via a **Telegram** bridge (`AGI_INTERFACE=telegram`, authorized
   chat only, gated writes denied over the wire).
+- **Has a real app.** A clean, premium **browser chat app** (`AGI_INTERFACE=api`,
+  or double-click `Myro.bat`) — served from your own machine, works offline —
+  with chat, voice, memory, routines, connectors, and settings tabs.
 - **Is a bridge.** Exposes `ask` / `retrieve_memory` / `remember` over **MCP** so
   your other agents share this brain (`AGI_INTERFACE=mcp`), plus a localhost HTTP
-  API (`AGI_INTERFACE=api`).
+  API.
 
 ## Layout
 

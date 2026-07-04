@@ -29,11 +29,13 @@ commands are different on Windows vs Mac/Linux — use the right set!
 
 **🪟 Windows (PowerShell):**
 ```powershell
-py -3.12 -m venv .venv                  # create Myro's workspace (or: python -m venv .venv)
+python -m venv .venv                    # create Myro's workspace  (or use  py -3.12 -m venv .venv)
 .\.venv\Scripts\Activate.ps1            # turn it on  ← the Windows command
 pip install -e .                        # install Myro
 python main.py                          # start him
 ```
+> Tip: if you have Python 3.12 installed, `py -3.12 -m venv .venv` pins it (the
+> smoothest version). Plain `python -m venv .venv` uses whatever you have.
 > If `Activate.ps1` is blocked ("running scripts is disabled"), run this once,
 > then the activate line again:
 > `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
@@ -68,13 +70,22 @@ If that passes, your install is good.
 ## ⭐ Use Myro as an app (no terminal)
 
 Prefer a real chat window instead of the terminal? Myro has a clean browser app.
+Install it once, then launch:
 
 ```bash
 pip install -e ".[serve]"        # one-time
-python main.py                    # from the Myro folder — with AGI_INTERFACE=api set
 ```
-…or, easiest of all, **double-click `Myro.bat`** (Windows) / run `./myro.sh`
+**Easiest — just double-click `Myro.bat`** (Windows) or run `./myro.sh`
 (Mac/Linux). Your browser opens to Myro's chat app automatically.
+
+Or start it by hand (note: the app needs `AGI_INTERFACE=api`, or it opens the
+terminal version):
+```powershell
+$env:AGI_INTERFACE="api"; python main.py     # Windows PowerShell
+```
+```bash
+AGI_INTERFACE=api python main.py             # Mac/Linux
+```
 
 It's a full interface: chat with message bubbles, a 🎤 talk button and 🔊 speak
 toggle (voice, nothing to install), and tabs for your **Memory**, **Routines**
@@ -197,6 +208,7 @@ starting Myro:
 | Setting | What it does |
 |---|---|
 | `AGI_ASSISTANT_NAME` | rename him (default `Myro`) |
+| `AGI_DATA_DIR` | where his memory lives (point it at a synced drive to sync/back up) |
 | `AGI_USER_NAME` | so he greets you by name |
 | `AGI_TIMEZONE` | your timezone (e.g. `Europe/Berlin`) for scheduling |
 | `AGI_VOICE=on` | speak replies by default |

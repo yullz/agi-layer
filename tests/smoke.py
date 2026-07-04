@@ -36,7 +36,9 @@ from models.frontier import FrontierModel                 # noqa: E402
 from models.local import LocalModel                       # noqa: E402
 from models.registry import ModelRegistry                 # noqa: E402
 
-PASS, FAIL = "\033[32mPASS\033[0m", "\033[31mFAIL\033[0m"
+_COLOR = sys.stdout.isatty() and os.name != "nt"   # plain text on Windows consoles
+PASS, FAIL = (("\033[32mPASS\033[0m", "\033[31mFAIL\033[0m") if _COLOR
+              else ("PASS", "FAIL"))
 _results: list[bool] = []
 
 

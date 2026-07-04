@@ -64,8 +64,14 @@ class Speaker:
             if shutil.which(cmd):
                 return lambda t, c=cmd: subprocess.run([c, t], timeout=90).returncode == 0
         if os.name == "nt" and shutil.which("powershell"):
-            ps = ("Add-Type -AssemblyName System.Speech; "
-                  "(New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak($args[0])")
-            return lambda t: subprocess.run(
-                ["powershell", "-NoProfile", "-Command", ps, t], timeout=90).returncode == 0
+            def _win_say(t):
+                # Embed the (single-quote-escaped) text into the script — passing
+                # it as a trailing arg to -Command doesn't bind to $args reliably.
+                safe = str(t).replace("'", "''")
+                ps = ("Add-Type -AssemblyName System.Speech; "
+                      "(New-Object System.Speech.Synthesis.SpeechSynthesizer)"
+                      f".Speak('{safe}')")
+                return subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                                      timeout=90).returncode == 0
+            return _win_say
         return None

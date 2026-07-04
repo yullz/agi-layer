@@ -106,7 +106,8 @@ def _write_file(args):
 def _run_shell(args):
     try:
         r = subprocess.run(str(args.get("command", "")), shell=True,
-                           capture_output=True, text=True, timeout=20)
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=20)
         return (r.stdout + r.stderr)[:4000] or "(no output)"
     except Exception as e:
         return f"(error: {e})"

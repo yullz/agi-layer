@@ -167,6 +167,16 @@ class Settings:
         _ov("pushover_user", "AGI_PUSHOVER_USER")
         _ov("github_token", "AGI_GITHUB_TOKEN")
         _ov("github_repo", "AGI_GITHUB_REPO")
+        # Relocate all of Myro's data (e.g. onto a synced drive), and avoid
+        # writing into a read-only install tree. The derived paths are frozen
+        # from DATA_DIR at class-definition time, so recompute them from the base.
+        base = os.environ.get("AGI_DATA_DIR")
+        if base:
+            root = Path(base).expanduser()
+            s.data_dir = root
+            s.episodic_db = root / "episodic.db"
+            s.vector_dir = root / "vectors"
+            s.graph_dir = root / "graph"
         for p in (s.data_dir, s.vector_dir, s.graph_dir):
             p.mkdir(parents=True, exist_ok=True)
         return s

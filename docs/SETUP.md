@@ -59,11 +59,19 @@ Type `:help` any time to see what he can do, and `exit` to leave.
 
 ## Step 3 — Check everything's healthy (optional)
 
+**Not sure what you've installed?** Double-click **`Doctor.bat`** (Windows) or run
+`python doctor.py`. It's a plain-language health check: it lists every feature,
+shows a ✓ or ✗ for each, and hands you the exact command to fix anything that's
+missing. It only *looks* — it never installs or changes anything, and never
+touches your memories.
+
+Want the deeper developer check too?
+
 ```bash
 python tests/smoke.py        # should print "All 186 checks PASS"
 ```
 
-If that passes, your install is good.
+If both look good, your install is healthy.
 
 ---
 

@@ -1,29 +1,28 @@
 """Guardrails — the bounded action space and approval gates.
 
-A system that self-modifies AND acts on your behalf needs limits:
-  - which actions run unattended vs require confirmation
-  - rate/impact ceilings on self-updates
-  - a sandbox requirement for self-authored skills before registration
-
-FAIL CLOSED. Until real policy checks exist, `allow` denies every action and
-`requires_confirmation` demands confirmation for everything not explicitly
-whitelisted. A guardrail that raised (the previous behaviour) would crash the
-caller instead of protecting it; one that returned True by default would wave
-through exactly the self-modifications it exists to gate. Deny-by-default is the
-only safe placeholder.
+FAIL CLOSED by default: unknown actions are denied. A small allow-list opens
+specific, bounded actions (e.g. a routing-policy update within an impact
+ceiling) so the governed improvement loop can run without waving the whole gate
+open. Self-authored skills, fine-tune swaps, and bulk memory edits stay denied
+until explicitly implemented and added here.
 """
 from __future__ import annotations
 
 
 class Guardrails:
-    def __init__(self, *, unattended: set[str] | None = None):
-        # Actions explicitly allowed to run without confirmation. Empty = none.
+    def __init__(self, *, allowed_actions=None, max_policy_changes: int = 4,
+                 unattended=None):
+        self.allowed_actions = set(allowed_actions or {"policy_update"})
+        self.max_policy_changes = max_policy_changes
         self.unattended = set(unattended or ())
 
     def allow(self, action: str, payload=None) -> bool:
-        # Deny by default. Populate real rate/impact/sandbox checks here.
-        return False
+        if action not in self.allowed_actions:
+            return False  # fail closed for anything not explicitly opened
+        if action == "policy_update":
+            changed = (payload or {}).get("changed", 10 ** 9)
+            return changed <= self.max_policy_changes
+        return True
 
     def requires_confirmation(self, action: str) -> bool:
-        # Everything needs confirmation unless explicitly marked unattended.
         return action not in self.unattended

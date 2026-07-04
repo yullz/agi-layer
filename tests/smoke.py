@@ -153,6 +153,50 @@ def main() -> int:
     rep2 = con.run()
     check("watermark advances (no re-processing)", rep2["new_episodes"] == 0)
 
+    # 7) governed self-improvement loop
+    print("\n7) self-improvement + governance")
+    from governance.audit import Audit
+    from governance.guardrails import Guardrails
+    from governance.versioning import Versioning
+    from improvement.optimizer import Optimizer
+    fb = Feedback()
+    for _ in range(6):  # synthetic feedback: one model clearly better
+        fb.signals.append({"session_id": "s", "model": "good-model", "score": 0.9})
+        fb.signals.append({"session_id": "s", "model": "bad-model", "score": 0.1})
+    pol = Policy()
+    opt = Optimizer()
+    proposal = opt.propose(pol, fb.recent())
+    check("optimizer proposes routing to the best model",
+          proposal is not None and proposal.routing_rules.get("general") == "good-model")
+    aud = Audit(os.path.join(tmp, "audit.jsonl"))
+    ver = Versioning(os.path.join(tmp, "versions"))
+    approved = opt.apply(pol, proposal, guardrails=Guardrails(), versioning=ver, audit=aud)
+    check("governance approves a bounded update", approved is not None)
+    check("audit recorded the change", len(aud.tail()) >= 1)
+    check("versioning snapshotted (rollback available)", len(ver.list()) >= 1)
+    over = Policy(routing_rules={c: c for c in "abcdef"})
+    denied = opt.apply(pol, over, guardrails=Guardrails(max_policy_changes=2),
+                       versioning=ver, audit=aud)
+    check("guardrails deny an over-ceiling update", denied is None)
+
+    # 8) bridge interfaces build or import-guard cleanly
+    print("\n8) bridge interfaces (MCP / HTTP)")
+    from interfaces.api import build_app
+    from interfaces.mcp import build_mcp_server
+
+    def _builds_or_guards(fn):
+        try:
+            return fn() is not None      # dep present -> built
+        except RuntimeError:
+            return True                  # dep absent -> clean guard
+        except Exception:
+            return False                 # anything else is a real bug
+
+    check("MCP bridge builds or import-guards cleanly",
+          _builds_or_guards(lambda: build_mcp_server(mem, orch)))
+    check("HTTP API builds or import-guards cleanly",
+          _builds_or_guards(lambda: build_app(orch)))
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

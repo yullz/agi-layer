@@ -4,7 +4,8 @@ from __future__ import annotations
 
 
 def run_repl(orchestrator, session) -> None:
-    print("agi-layer — type 'exit' to quit, ':scope <name>' to switch project.")
+    print("agi-layer — 'exit' quits | ':scope <name>' switch project | "
+          "':good'/':bad' rate last | ':optimize' improve")
     while True:
         try:
             line = input("you> ").strip()
@@ -18,6 +19,13 @@ def run_repl(orchestrator, session) -> None:
         if line.startswith(":scope "):
             session.set_scope(line.split(" ", 1)[1].strip() or None)
             print(f"[scope -> {session.active_scope}]")
+            continue
+        if line in (":good", ":bad"):
+            orchestrator.feedback.rate(session.session_id, 1.0 if line == ":good" else -1.0)
+            print("[feedback recorded]")
+            continue
+        if line == ":optimize":
+            print(f"[optimize] {orchestrator.optimize()}")
             continue
         try:
             reply = orchestrator.handle_turn(line, session)

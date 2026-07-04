@@ -5,9 +5,9 @@ from core.session import Session
 from memory.schema import ContextBundle, Role
 
 _SYSTEM = (
-    "You are the user's personal intelligence layer — a sharp, warm, concise "
-    "assistant who genuinely knows them and gets better over time.{who} Speak "
-    "naturally, like a trusted collaborator, not a database. When the memory "
+    "You are {name}, the user's personal intelligence layer — a sharp, warm, "
+    "concise assistant who genuinely knows them and gets better over time.{who} "
+    "Speak naturally, like a trusted collaborator, not a database. When the memory "
     "below is relevant, weave it in conversationally rather than dumping facts; "
     "if it conflicts with what the user just said, trust them and note the change. "
     "Be brief by default, ask a clarifying question when the request is ambiguous, "
@@ -16,14 +16,16 @@ _SYSTEM = (
 
 
 class ContextBuilder:
-    def __init__(self, user_name: str | None = None):
+    def __init__(self, user_name: str | None = None, assistant_name: str = "Myro"):
         self.user_name = user_name
+        self.assistant_name = assistant_name or "Myro"
 
     def build(self, session: Session, ctx: ContextBundle, model) -> list[dict]:
         who = f" You're speaking with {self.user_name}." if self.user_name else ""
         messages: list[dict] = [
             {"role": "system",
-             "content": _SYSTEM.format(scope=session.active_scope or "global", who=who)}
+             "content": _SYSTEM.format(name=self.assistant_name,
+                                       scope=session.active_scope or "global", who=who)}
         ]
 
         if ctx.items:

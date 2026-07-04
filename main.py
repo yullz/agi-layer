@@ -22,6 +22,7 @@ from improvement.optimizer import Optimizer
 from core.agent import Agent
 from core.browser_agent import BrowserPilot
 from core.context_builder import ContextBuilder
+from core.onboarding import Onboarding
 from core.orchestrator import Orchestrator
 from core.policy import Policy
 from core.router import Router
@@ -93,7 +94,8 @@ def build():
     orchestrator = Orchestrator(
         memory=memory,
         router=router,
-        context_builder=ContextBuilder(user_name=cfg.user_name),
+        context_builder=ContextBuilder(user_name=cfg.user_name,
+                                       assistant_name=cfg.assistant_name),
         skills=Skills(model=registry.local_private(),
                       registry_dir=cfg.data_dir / "skills",
                       guardrails=guardrails, audit=audit),
@@ -125,6 +127,7 @@ def build():
     orchestrator.connectors = connectors
     orchestrator.agent = Agent(router, tools, audit=audit)
     orchestrator.routines = Routines(cfg.data_dir / "routines.json", orchestrator.agent)
+    orchestrator.onboarding = Onboarding(cfg.data_dir / "onboarding.json")
     return cfg, orchestrator
 
 

@@ -890,6 +890,33 @@ def main() -> int:
     check("offline echo uses the plain path (no agent routing)",
           re_ == "echo-reply" and oe.last_steps == [])
 
+    # 30) identity (Myro) + first-boot onboarding (Phase 18)
+    print("\n30) identity + onboarding")
+    from core.onboarding import Onboarding
+    ob = Onboarding(os.path.join(tmp, "onb.json"))
+    qs = ob.questions()
+    check("onboarding asks 10-15 questions", 10 <= len(qs) <= 15)
+    check("each question has key / prompt / fact template",
+          all(q.get("key") and q.get("q") and "{a}" in q.get("fact", "") for q in qs))
+    check("skip and stop answers are recognized",
+          ob.is_skip("") and ob.is_skip("skip") and ob.is_stop("stop")
+          and not ob.is_stop("berlin"))
+    omem, _oe1, _oe2 = build_memory(os.path.join(tmp, "onb_mem"))
+    name_q = next(q for q in qs if q["key"] == "name")
+    fact = ob.record(omem, name_q, "Yulian", scope=None)
+    check("onboarding stores an answer as durable memory",
+          "Yulian" in fact
+          and any("Yulian" in p["content"] for p in omem.provenance("name", scope=None)))
+    check("onboarding is not done until completed", not ob.is_done())
+    ob.complete({"name": "Yulian"})
+    check("onboarding marks done + remembers the name across restart",
+          ob.is_done() and Onboarding(os.path.join(tmp, "onb.json")).name() == "Yulian")
+    persona = ContextBuilder().build(Session(scope="demo"), ContextBundle(), None)[0]["content"]
+    check("assistant identifies as Myro in its persona", persona.startswith("You are Myro"))
+    check("assistant name is configurable",
+          ContextBuilder(assistant_name="Zara")
+          .build(Session(), ContextBundle(), None)[0]["content"].startswith("You are Zara"))
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

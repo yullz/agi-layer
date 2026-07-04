@@ -74,6 +74,9 @@ class Settings:
     # name, or an Ollama tag). Falls back to a hashing embedding if unavailable.
     embedding_model: str = "all-MiniLM-L6-v2"
 
+    # The assistant's name (its identity in the persona + interface).
+    assistant_name: str = "Myro"
+
     # Optional: the user's name, so the assistant can greet them personally.
     user_name: str | None = None
 

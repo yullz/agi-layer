@@ -58,6 +58,36 @@ class GraphStore:
                  relation.scope, relation.valid_from, relation.superseded_by))
             self._db.commit()
 
+    def get_or_create_entity(self, name: str, type: str = "", scope: str | None = None) -> str:
+        """Return the id of an existing (name, scope) entity or create one, so
+        the graph stays deduped by name+scope and relations stay stable."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT id FROM entities WHERE name=? AND scope IS ?", (name, scope)).fetchone()
+            if row:
+                return row["id"]
+            ent = Entity(name=name, type=type, scope=scope)
+            self._db.execute(
+                "INSERT INTO entities (id, name, type, scope, attributes) VALUES (?,?,?,?,?)",
+                (ent.id, ent.name, ent.type, ent.scope, json.dumps({})))
+            self._db.commit()
+            return ent.id
+
+    def relate(self, src_id: str, dst_id: str, type: str, scope: str | None = None) -> None:
+        """Create a current relation if an identical one doesn't already exist."""
+        with self._lock:
+            exists = self._db.execute(
+                "SELECT 1 FROM relations WHERE src=? AND dst=? AND type=? AND scope IS ? "
+                "AND superseded_by IS NULL", (src_id, dst_id, type, scope)).fetchone()
+            if exists:
+                return
+            rel = Relation(src=src_id, dst=dst_id, type=type, scope=scope)
+            self._db.execute(
+                "INSERT INTO relations (id, src, dst, type, scope, valid_from, superseded_by) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (rel.id, rel.src, rel.dst, rel.type, rel.scope, rel.valid_from, rel.superseded_by))
+            self._db.commit()
+
     def neighbors(self, entity_names: list[str], scope: str | None = None,
                   hops: int = 2) -> list[RetrievalCandidate]:
         """Traverse from the named entities and return connected (current) facts

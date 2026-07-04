@@ -93,18 +93,25 @@ def build():
 
 
 def main():
-    _cfg, orchestrator = build()
-    # Choose an interface: cli (default) | api | mcp. (TODO: also start an
-    # APScheduler job calling memory.consolidate() on cfg.consolidation_cron.)
-    iface = os.environ.get("AGI_INTERFACE", "cli").lower()
-    if iface == "api":
-        from interfaces.api import build_app, serve
-        serve(build_app(orchestrator))
-    elif iface == "mcp":
-        from interfaces.mcp import build_mcp_server
-        build_mcp_server(orchestrator.memory, orchestrator).run()
-    else:
-        run_repl(orchestrator, Session())
+    cfg, orchestrator = build()
+    # Background consolidation ("sleep") on the configured cron — APScheduler if
+    # installed, else a stdlib timer fallback.
+    from core.scheduler import Scheduler
+    scheduler = Scheduler(orchestrator.memory.consolidate, cron=cfg.consolidation_cron)
+    scheduler.start()
+    try:
+        # Choose an interface: cli (default) | api | mcp.
+        iface = os.environ.get("AGI_INTERFACE", "cli").lower()
+        if iface == "api":
+            from interfaces.api import build_app, serve
+            serve(build_app(orchestrator))
+        elif iface == "mcp":
+            from interfaces.mcp import build_mcp_server
+            build_mcp_server(orchestrator.memory, orchestrator).run()
+        else:
+            run_repl(orchestrator, Session())
+    finally:
+        scheduler.stop()
 
 
 if __name__ == "__main__":

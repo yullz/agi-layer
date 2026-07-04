@@ -280,6 +280,68 @@ def main() -> int:
     check("contradiction superseded the stale fact",
           any("Berlin" in c for c in live) and not any("Sofia" in c for c in live))
 
+    # 14) typed relation extraction into the graph
+    print("\n14) typed relations")
+
+    class _RelLLM:
+        model_name, is_local = "rel", True
+
+        def available(self):
+            return True
+
+        def generate(self, prompt, tools=None):
+            sysmsg = prompt[0]["content"] if prompt and isinstance(prompt[0], dict) else ""
+            if "triples" in sysmsg:
+                return '[["You","works_on","WhaleTrack"],["WhaleTrack","uses","Docker"]]'
+            return "[]"
+
+    tg = GraphStore(os.path.join(tmp, "tgraph"))
+    wp = WritePipeline(episodic=None, semantic=object(), graph=tg,
+                       extractor=LLMExtractor(_RelLLM()))
+    wp._update_graph(Turn(user_input="I work on WhaleTrack with Docker.",
+                          assistant_reply="", scope="w"))
+    check("typed relations extracted into the graph",
+          any("works_on" in c.content for c in tg.neighbors(["You"], scope="w")))
+
+    # 15) skill self-authoring (governed, fail-closed)
+    print("\n15) skill self-authoring")
+    from governance.audit import Audit
+    from governance.guardrails import Guardrails
+
+    class _SkillLLM:
+        model_name, is_local = "sk", True
+
+        def available(self):
+            return True
+
+        def generate(self, prompt, tools=None):
+            return "```python\ndef skill(payload):\n    return sum(payload.get('nums', []))\n```"
+
+    denied = Skills(model=_SkillLLM(), registry_dir=os.path.join(tmp, "sk1"),
+                    guardrails=Guardrails()).author("sum a list of numbers")
+    check("skill authoring denied by default (fail closed)",
+          denied["status"] == "denied-by-governance")
+    aud = Audit(os.path.join(tmp, "sk_audit.jsonl"))
+    sk = Skills(model=_SkillLLM(), registry_dir=os.path.join(tmp, "sk2"),
+                guardrails=Guardrails(allowed_actions={"skill_author"}), audit=aud)
+    res = sk.author("sum a list of numbers", test_input={"nums": [1, 2, 3]})
+    check("skill authored + sandbox-tested + registered", res["status"] == "registered")
+    check("authored skill is registered + runnable",
+          sk.get(res["name"]) is not None and sk.get(res["name"])({"nums": [2, 3]}) == 5)
+    check("skill authoring audited", len(aud.tail()) >= 1)
+
+    # 16) memory seeding — bootstrap what we know about the user
+    print("\n16) memory seeding")
+    from memory.seed import seed_memory
+    smem, _s1, _s2 = build_memory(os.path.join(tmp, "seed"))
+    seeded = seed_memory(smem)
+    check("seeding wrote facts + relations",
+          seeded["facts"] >= 3 and seeded["relations"] >= 3)
+    got = smem.retrieve("what am I building?", scope=None, budget_tokens=2000)
+    check("seeded facts are retrievable", any("agi-layer" in c.content for c in got.items))
+    check("seeded relations landed in the graph",
+          any("works_on" in c.content for c in smem.graph.neighbors(["You"], scope=None)))
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

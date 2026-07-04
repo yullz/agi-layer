@@ -24,6 +24,12 @@ _JUDGE_SYS = (
     "SAME (the new restates the old), CONTRADICTS (the new updates/replaces the "
     "old), or UNRELATED."
 )
+_RELATION_SYS = (
+    "Extract relationships as JSON triples [subject, predicate, object] about "
+    "the user's world (people, projects, tools, places). Predicate is a short "
+    "snake_case verb (works_on, uses, lives_in, prefers, knows). Output a JSON "
+    "array of 3-element arrays; [] if none. Keep subject/object short."
+)
 
 
 class LLMExtractor:
@@ -60,6 +66,13 @@ class LLMExtractor:
             return "same"
         return "unrelated"
 
+    def extract_relations(self, text: str) -> list[tuple]:
+        """Return typed (subject, predicate, object) triples for the graph."""
+        reply = self.model.generate(
+            [{"role": "system", "content": _RELATION_SYS},
+             {"role": "user", "content": text or ""}])
+        return _parse_triples(reply)
+
 
 def _parse_json_list(text: str) -> list[str]:
     if not text:
@@ -79,3 +92,28 @@ def _parse_json_list(text: str) -> list[str]:
 def _first_bracket(text: str):
     m = re.search(r"\[.*\]", text, re.S)
     return m.group(0) if m else None
+
+
+def _first_json_array(text: str):
+    if not text:
+        return []
+    for candidate in (text, _first_bracket(text)):
+        if not candidate:
+            continue
+        try:
+            v = json.loads(candidate)
+            if isinstance(v, list):
+                return v
+        except Exception:
+            continue
+    return []
+
+
+def _parse_triples(text: str) -> list[tuple]:
+    out = []
+    for row in _first_json_array(text):
+        if isinstance(row, (list, tuple)) and len(row) >= 3:
+            s, p, o = str(row[0]).strip(), str(row[1]).strip(), str(row[2]).strip()
+            if s and o:
+                out.append((s, p or "related_to", o))
+    return out

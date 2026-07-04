@@ -528,6 +528,8 @@ def main() -> int:
           len(added) >= 2 and install_starters(strt) == [])
     check("a named starter (morning) is present with a task",
           bool(strt.list().get("morning", {}).get("task")))
+    check("phone briefing + end-of-day recap starters install",
+          "phone_briefing" in strt.list() and "eod_recap" in strt.list())
     check("starters are unscheduled by default (no background work)",
           all(not describe_schedule(it) for it in strt.list().values()))
 
@@ -966,6 +968,10 @@ def main() -> int:
           and notif.channel({"telegram_token": "T", "telegram_chat_id": "1"}) == "telegram"
           and notif.channel({"pushover_token": "p", "pushover_user": "u"}) == "pushover"
           and notif.channel({}) is None)
+    n_on = _bdt(None, allow_web=False, notify_config={"ntfy_topic": "x"}).get("notify")
+    check("notify tool registers (unattended) only when a channel is set",
+          n_on is not None and n_on.unattended
+          and _bdt(None, allow_web=False, notify_config={}).get("notify") is None)
 
     from core.telegram_bridge import TelegramBridge
 

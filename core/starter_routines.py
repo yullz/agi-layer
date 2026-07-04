@@ -38,6 +38,25 @@ STARTERS = [
         "suggest": "every 480m",
         "about": "Project recap — a memory-only 'where things stand' summary.",
     },
+    {
+        "name": "phone_briefing",
+        "task": ("Get today's most important AI and technology news from the web, "
+                 "and check my calendar for today's events. Then send me a push "
+                 "notification titled 'Morning briefing' with the top 3 stories and "
+                 "a one-line summary of my schedule."),
+        "scope": None,
+        "suggest": "at workstart",
+        "about": "Morning phone briefing — news + today's calendar, pushed to your phone.",
+    },
+    {
+        "name": "eod_recap",
+        "task": ("Recap my day: summarize my recent git commits and what I worked "
+                 "on from memory, and note anything still open. Then send me a push "
+                 "notification titled 'End of day' with a short recap."),
+        "scope": None,
+        "suggest": "at workend",
+        "about": "End-of-day recap — what you did + what's open, pushed to your phone.",
+    },
 ]
 
 

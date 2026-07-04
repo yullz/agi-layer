@@ -27,8 +27,8 @@ from memory.consolidation import Consolidator             # noqa: E402
 from memory.episodic import EpisodicStore                 # noqa: E402
 from memory.graph import GraphStore                       # noqa: E402
 from memory.procedural import ProceduralStore             # noqa: E402
-from memory.schema import ContextBundle, Entity, Relation, Turn   # noqa: E402
-from memory.semantic import SemanticStore                 # noqa: E402
+from memory.schema import ContextBundle, Entity, Relation, Source, Turn   # noqa: E402
+from memory.semantic_native import NativeSemanticStore    # noqa: E402
 from memory.store import MemoryStore                      # noqa: E402
 from memory.write_path import WritePipeline               # noqa: E402
 from models.frontier import FrontierModel                 # noqa: E402
@@ -47,7 +47,7 @@ def check(name: str, cond: bool) -> None:
 def build_memory(tmp: str):
     os.makedirs(tmp, exist_ok=True)
     episodic = EpisodicStore(os.path.join(tmp, "episodic.db"))
-    semantic = SemanticStore(os.path.join(tmp, "vectors"))   # degrades w/o Mem0
+    semantic = NativeSemanticStore(os.path.join(tmp, "vectors"))  # owned vector store
     graph = GraphStore(os.path.join(tmp, "graph"))
     procedural = ProceduralStore(os.path.join(tmp, "episodic.db"))
     write_pipeline = WritePipeline(episodic=episodic, semantic=semantic, graph=graph)
@@ -64,7 +64,7 @@ def main() -> int:
     print(f"agi-layer smoke test  (data: {tmp})\n")
 
     mem, episodic, semantic = build_memory(os.path.join(tmp, "main"))
-    print(f"Semantic (Mem0) available: {semantic.available}   "
+    print(f"Semantic backend: native (available={semantic.available})   "
           f"Episodic FTS5: {episodic._fts}\n")
 
     # 1) write -> persist -> recall through the real SQLite spine
@@ -232,6 +232,27 @@ def main() -> int:
         except Exception:
             ok_gepa = False
     check("GEPA optimizer available or import-guards cleanly", ok_gepa)
+
+    # 12) native semantic memory: vector search + reconcile + supersede + decay
+    print("\n12) native semantic memory (owned vector store)")
+    from memory.schema import MemoryItem
+    ns = NativeSemanticStore(os.path.join(tmp, "nsem"))
+    ns.add_turn("My favourite database is Postgres and I love Rust.", "ok", scope="p")
+    ns.add_turn("My favourite database is Postgres and I love Rust.", "ok", scope="p")
+    check("reconcile dedups near-duplicate facts", ns.count_current("p") == 1)
+    hits = ns.search("what database do I like", scope="p", k=5)
+    check("native vector search returns VECTOR candidates",
+          len(hits) >= 1 and hits[0].source == Source.VECTOR)
+    base = ns.search("database", scope="p")[0]
+    ns.supersede(base.ref_id, MemoryItem(content="I now prefer SQLite.", scope="p"))
+    cur = ns.search("database", scope="p")
+    check("supersede writes new + retires old (temporal)",
+          any("SQLite" in h.content for h in cur) and ns.count_current("p") == 1)
+    ns.upsert(MemoryItem(content="Trivial throwaway.", scope="p",
+                         importance=0.01, last_accessed=0.0))
+    before = ns.count_current("p")
+    ns.decay(half_life_days=30, cold_threshold=0.15)
+    check("decay archives cold items", ns.count_current("p") < before)
 
     print()
     if all(_results):

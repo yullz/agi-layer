@@ -54,8 +54,40 @@ class Consolidator:
             except Exception:
                 pass
 
+        promoted = self._promote(episodes)
+        archived = self._decay()
         self._save_ts(max_ts)
-        return {"new_episodes": len(episodes), "scopes": len(by_scope), "summaries": summaries}
+        return {"new_episodes": len(episodes), "scopes": len(by_scope),
+                "summaries": summaries, "promoted": promoted, "archived": archived}
+
+    def _promote(self, episodes) -> int:
+        """Mine new user episodes for durable facts live extraction missed and
+        reconcile them into semantic memory. Reconcile dedups, so re-mining is
+        safe. No-op when the store doesn't support add_turn."""
+        add_turn = getattr(self.semantic, "add_turn", None)
+        if not callable(add_turn):
+            return 0
+        n = 0
+        for ep in episodes:
+            if _role(ep) != "user" or not ep.content:
+                continue
+            try:
+                add_turn(ep.content, "", scope=ep.scope)
+                n += 1
+            except Exception:
+                pass
+        return n
+
+    def _decay(self) -> int:
+        """Recompute effective importance and archive cold items. No-op when the
+        store doesn't support decay (e.g. Mem0 manages its own)."""
+        decay = getattr(self.semantic, "decay", None)
+        if not callable(decay):
+            return 0
+        try:
+            return decay(self.half_life_days, self.cold_threshold)
+        except Exception:
+            return 0
 
     # --- summarization ------------------------------------------------------
     def _summarize(self, eps) -> str:

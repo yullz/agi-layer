@@ -66,6 +66,10 @@ class Settings:
     # treated as sensitive by convention.
     sensitive_scopes: tuple = ()
 
+    # Semantic memory backend: "native" (owned SQLite vector store — unlocks
+    # reconcile-on-write, decay, and temporal supersede) or "mem0" (hybrid).
+    semantic_backend: str = "native"
+
     # Model registry, parsed from config/models.yaml (see _load_models_config).
     models_config: dict = field(default_factory=dict)
 

@@ -214,6 +214,43 @@ def _web_search(args):
     return "\n".join(f"{i}. {t} — {u}" for i, (t, u) in enumerate(results[:6], 1))
 
 
+def _browse(args):
+    """Open a URL in a real headless browser (Chromium via Playwright), let its
+    JavaScript run, and return the rendered text — for pages `web_fetch` can't
+    read (SPAs, infinite-scroll, JS-gated content). Same SSRF guard as fetch.
+
+    Degrades cleanly: if Playwright (or its browser) isn't installed, or the
+    launch fails, it falls back to the plain-text `web_fetch`, so the tool always
+    returns something useful. Install with `pip install playwright && playwright
+    install chromium`."""
+    url = str(args.get("url", "")).strip()
+    ok, why = _safe_url(url)
+    if not ok:
+        return f"(blocked: {why})"
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception:
+        return _web_fetch(args)   # no Playwright -> plain fetch
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            try:
+                page = browser.new_page(user_agent=_UA)
+                page.goto(url, timeout=20000, wait_until="domcontentloaded")
+                try:
+                    page.wait_for_load_state("networkidle", timeout=5000)
+                except Exception:
+                    pass
+                text = page.inner_text("body")
+            finally:
+                browser.close()
+        text = re.sub(r"\n\s*\n+", "\n", text or "").strip()
+        return text[:_WEB_MAX_CHARS] or "(no readable text)"
+    except Exception as e:
+        fb = _web_fetch(args)     # launch/render failed -> best-effort fetch
+        return fb if not fb.startswith("(error") else f"(error: {e})"
+
+
 def build_default_tools(memory=None, allow_web: bool = True) -> ToolRegistry:
     reg = ToolRegistry()
     reg.add(Tool("now", "Get the current date and time.",
@@ -233,6 +270,8 @@ def build_default_tools(memory=None, allow_web: bool = True) -> ToolRegistry:
                      _web_search, params={"query": "str"}, unattended=True))
         reg.add(Tool("web_fetch", "Fetch a web page (http/https) and read its text.",
                      _web_fetch, params={"url": "str"}, unattended=True))
+        reg.add(Tool("browse", "Open a page in a real browser (renders JavaScript) "
+                     "and read its text.", _browse, params={"url": "str"}, unattended=True))
     if memory is not None:
         reg.add(Tool("recall", "Search your memory for what you know.",
                      lambda a: _recall(memory, a), params={"query": "str"}, unattended=True))

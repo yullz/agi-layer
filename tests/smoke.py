@@ -508,6 +508,29 @@ def main() -> int:
     check("daily routine doesn't refire the same day",
           not any(f["name"] == "brief" for f in dr.run_due(now=base + 60)))
 
+    # 21) Playwright browser tool + prebuilt starter routines (Phase 13)
+    print("\n21) browser tool + starter routines")
+    from core.tools import _browse
+    from core.routines import describe_schedule
+    from core.starter_routines import install_starters
+    check("browse tool registered when web is allowed",
+          "browse" in _bdt(None, allow_web=True).names())
+    check("browse tool omitted when web is disallowed",
+          "browse" not in _bdt(None, allow_web=False).names())
+    # SSRF guard applies to the browser too (checked before any launch/import).
+    check("browse blocks loopback (SSRF guard)",
+          "blocked" in _browse({"url": "http://127.0.0.1/"}))
+
+    stagent = Agent(_ScriptRouter([]), a_tools)
+    strt = Routines(os.path.join(tmp, "starters.json"), stagent)
+    added = install_starters(strt)
+    check("starter routines install (idempotent)",
+          len(added) >= 2 and install_starters(strt) == [])
+    check("a named starter (morning) is present with a task",
+          bool(strt.list().get("morning", {}).get("task")))
+    check("starters are unscheduled by default (no background work)",
+          all(not describe_schedule(it) for it in strt.list().values()))
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

@@ -173,6 +173,20 @@ def _handle_command(line, orch, session) -> bool:
             gate = "" if s["unattended"] else "  (asks first)"
             print(f"  • {s['name']}({', '.join(s['args'])}) — {s['description']}{gate}")
         return True
+    if line == ":starters":
+        from core.starter_routines import STARTERS, install_starters
+        routines = getattr(orch, "routines", None)
+        if routines is None:
+            print("Routines aren't available right now.")
+            return True
+        added = install_starters(routines)
+        print(f"Added {len(added)} starter routine(s): {', '.join(added)}."
+              if added else "Starter routines are already installed.")
+        print("What they do:")
+        for s in STARTERS:
+            print(f"  • {s['name']} — {s['about']}")
+        print("Try one now:  :run morning   ·   schedule it:  :schedule morning at 08:00")
+        return True
     if line.startswith(":automate "):
         routines = getattr(orch, "routines", None)
         rest = line.split(" ", 1)[1]
@@ -196,7 +210,8 @@ def _handle_command(line, orch, session) -> bool:
                 last = f"\n      last: {_short(it['last_result'])}" if it.get("last_result") else ""
                 print(f"  • {name}: {it['task']}{where}{tag}{last}")
         else:
-            print("No routines yet — create one with  :automate <name> = <task>.")
+            print("No routines yet — type  :starters  for ready-made ones, or "
+                  "create your own with  :automate <name> = <task>.")
         return True
     if line.startswith(":schedule "):
         routines = getattr(orch, "routines", None)
@@ -227,6 +242,7 @@ _HELP = (
     "Commands:\n"
     "  :do <task>            let me do a task using my tools\n"
     "  :tools                what tools I can use\n"
+    "  :starters             install ready-made routines (briefing, digest…)\n"
     "  :automate <n> = <t>   save task <t> as a routine named <n>\n"
     "  :schedule <n> ...     schedule a routine: every <N>m | at <HH:MM> | off\n"
     "  :routines             list saved routines (+ schedules, last result)\n"

@@ -12,7 +12,7 @@ embeddings light it up further — nothing is required to start.
 ```bash
 python main.py        # first boot: Myro asks a few questions to get to know you,
                       # then just talk to him — ask, or ask him to do things
-python tests/smoke.py # 139 offline checks prove the whole spine
+python tests/smoke.py # 146 offline checks prove the whole spine
 ```
 
 Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and

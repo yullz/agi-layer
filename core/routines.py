@@ -18,12 +18,21 @@ import json
 import os
 import time
 
+from core.profile import day_key as _day_key
+from core.profile import now_hhmm as _now_hhmm
+
 
 class Routines:
-    def __init__(self, path, agent):
+    def __init__(self, path, agent, tz=None):
         self.path = str(path)
         self.agent = agent
+        self.tz = tz            # user's tzinfo; None -> machine local time
         self._items = self._load()
+
+    def set_tz(self, tz) -> None:
+        """Apply the user's timezone (from onboarding/profile) so daily 'at
+        HH:MM' routines fire at their local wall-clock, not the machine's."""
+        self.tz = tz
 
     # --- CRUD ---------------------------------------------------------------
     def add(self, name: str, task: str, scope: str | None = None,
@@ -91,7 +100,7 @@ class Routines:
             if it.get("every_minutes"):
                 it["next_run"] = now + int(it["every_minutes"]) * 60
             elif it.get("at"):
-                it["_last_day"] = _day_key(now)
+                it["_last_day"] = _day_key(self.tz, now)
             fired.append({"name": name, "answer": res.get("answer")})
         if fired:
             self._save()
@@ -103,9 +112,10 @@ class Routines:
             return nr is None or now >= nr
         at = it.get("at")
         if at:
-            lt = time.localtime(now)
-            current = f"{lt.tm_hour:02d}:{lt.tm_min:02d}"
-            return current >= at and it.get("_last_day") != _day_key(now)
+            # Evaluate "at HH:MM" against the user's timezone, and reset the
+            # once-a-day guard at their local midnight (not the machine's).
+            current = _now_hhmm(self.tz, now)
+            return current >= at and it.get("_last_day") != _day_key(self.tz, now)
         return False
 
     # --- persistence --------------------------------------------------------
@@ -135,11 +145,6 @@ def _norm_hhmm(s: str) -> str:
         return f"{int(h):02d}:{int(m):02d}"
     except Exception:
         return (s or "").strip()
-
-
-def _day_key(now: float) -> str:
-    lt = time.localtime(now)
-    return f"{lt.tm_year}-{lt.tm_yday}"
 
 
 def describe_schedule(it: dict) -> str:

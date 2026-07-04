@@ -77,6 +77,11 @@ class Settings:
     # The assistant's name (its identity in the persona + interface).
     assistant_name: str = "Myro"
 
+    # Optional timezone override (IANA name, a city, or a UTC offset like
+    # "UTC+2"). If unset, it's derived from the onboarding location answer so
+    # daily routines fire at your local wall-clock; else the machine's local time.
+    timezone: str | None = None
+
     # Optional: the user's name, so the assistant can greet them personally.
     user_name: str | None = None
 

@@ -25,6 +25,7 @@ from core.context_builder import ContextBuilder
 from core.onboarding import Onboarding
 from core.orchestrator import Orchestrator
 from core.policy import Policy
+from core.profile import parse_timezone
 from core.router import Router
 from core.routines import Routines
 from core.session import Session
@@ -126,8 +127,13 @@ def build():
     orchestrator.tools = tools
     orchestrator.connectors = connectors
     orchestrator.agent = Agent(router, tools, audit=audit)
-    orchestrator.routines = Routines(cfg.data_dir / "routines.json", orchestrator.agent)
-    orchestrator.onboarding = Onboarding(cfg.data_dir / "onboarding.json")
+    # Timezone from config, else derived from the onboarding location answer, so
+    # daily routines fire at the user's local wall-clock.
+    onboarding = Onboarding(cfg.data_dir / "onboarding.json")
+    tz = parse_timezone(cfg.timezone or onboarding.timezone())
+    orchestrator.routines = Routines(cfg.data_dir / "routines.json",
+                                     orchestrator.agent, tz=tz)
+    orchestrator.onboarding = onboarding
     return cfg, orchestrator
 
 

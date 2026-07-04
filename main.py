@@ -31,6 +31,7 @@ from memory.consolidation import Consolidator
 from memory.episodic import EpisodicStore
 from memory.graph import GraphStore
 from memory.procedural import ProceduralStore
+from memory.extractor import LLMExtractor
 from memory.semantic import SemanticStore
 from memory.semantic_native import NativeSemanticStore
 from memory.store import MemoryStore
@@ -55,7 +56,10 @@ def build():
     if cfg.semantic_backend == "mem0":
         semantic = SemanticStore(cfg.vector_dir, embedder)      # hybrid engine
     else:
-        semantic = NativeSemanticStore(cfg.vector_dir, embedder)  # owned store
+        # LLM extraction/contradiction runs on the private (local) model for
+        # privacy; falls back to heuristics when it's unreachable.
+        extractor = LLMExtractor(registry.get(registry.default_name("private")))
+        semantic = NativeSemanticStore(cfg.vector_dir, embedder, extractor=extractor)
     graph = GraphStore(cfg.graph_dir)
     procedural = ProceduralStore(cfg.episodic_db)
 

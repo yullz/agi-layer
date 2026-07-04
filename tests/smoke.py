@@ -342,6 +342,34 @@ def main() -> int:
     check("seeded relations landed in the graph",
           any("works_on" in c.content for c in smem.graph.neighbors(["You"], scope=None)))
 
+    # 17) scope + privacy regressions (Phase 9 review fixes)
+    print("\n17) scope + privacy")
+    pmem, _pe, psem = build_memory(os.path.join(tmp, "priv"))
+    psem.upsert(MemoryItem(content="Your name is Yulian.", scope=None, importance=0.8))
+    hs = Session(scope="health-private")
+    hs.add_user("My blood pressure is 130 over 85 lately.")
+    hs.add_assistant("noted")
+    pmem.write(Turn.from_session(hs))
+    # global/identity facts surface INSIDE a project scope (the S1 fix)
+    inproj = pmem.retrieve("what is my name", scope="whaletrack", budget_tokens=2000)
+    check("global facts retrievable inside a project scope",
+          any("Yulian" in c.content for c in inproj.items))
+    # sensitive-scope memory is withheld from an external model (the M1 fix)...
+    ext = pmem.retrieve("blood pressure", scope="health-private",
+                        budget_tokens=2000, for_external=True)
+    check("sensitive memory withheld from external models",
+          not any("blood" in c.content.lower() for c in ext.items))
+    # ...but still available to an on-box model
+    loc = pmem.retrieve("blood pressure", scope="health-private",
+                        budget_tokens=2000, for_external=False)
+    check("sensitive memory still available on-box",
+          any("blood" in c.content.lower() for c in loc.items))
+    # re-seeding is idempotent (deterministic ids)
+    smem2, _q1, _q2 = build_memory(os.path.join(tmp, "seed2"))
+    from memory.seed import seed_memory as _seed
+    _seed(smem2); _seed(smem2)
+    check("re-seeding is idempotent (no duplicates)", smem2.semantic.count_current(None) == 7)
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

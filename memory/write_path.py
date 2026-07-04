@@ -10,6 +10,7 @@ Two phases:
 """
 from __future__ import annotations
 
+from core.log import log
 from memory.schema import Episode, MemoryItem, Role, Turn
 
 
@@ -78,13 +79,13 @@ class WritePipeline:
             if callable(add_turn):
                 add_turn(turn.user_input, turn.assistant_reply, scope=turn.scope)
         except Exception:
-            pass
+            log.warning("semantic ingest failed (raw episode kept)", exc_info=True)
 
-        # Populate the knowledge graph: extract entities and link co-occurrences.
+        # Populate the knowledge graph: extract entities and link relations.
         try:
             self._update_graph(turn)
         except Exception:
-            pass
+            log.warning("graph update failed", exc_info=True)
 
     def _update_graph(self, turn: Turn) -> None:
         if not hasattr(self.graph, "get_or_create_entity"):

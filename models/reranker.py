@@ -11,7 +11,18 @@ local-first, upgrade `model_name` to a Qwen3-Reranker checkpoint.
 """
 from __future__ import annotations
 
+import math
+
 from memory.schema import RetrievalCandidate
+
+
+def _sigmoid(x: float) -> float:
+    # Squash raw cross-encoder logits (~±11) into [0,1] so rerank_score is
+    # comparable with the other normalised signals in score_final.
+    try:
+        return 1.0 / (1.0 + math.exp(-x))
+    except OverflowError:
+        return 0.0 if x < 0 else 1.0
 
 
 class Reranker:
@@ -41,7 +52,7 @@ class Reranker:
         try:
             scores = model.predict([(query, c.content) for c in candidates])
             for c, s in zip(candidates, scores):
-                c.rerank_score = float(s)
+                c.rerank_score = _sigmoid(float(s))
             candidates.sort(key=lambda c: c.rerank_score, reverse=True)
         except Exception:
             pass

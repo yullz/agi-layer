@@ -70,6 +70,13 @@ class Settings:
     # reconcile-on-write, decay, and temporal supersede) or "mem0" (hybrid).
     semantic_backend: str = "native"
 
+    # Local embedding model for the native semantic store (a sentence-transformers
+    # name, or an Ollama tag). Falls back to a hashing embedding if unavailable.
+    embedding_model: str = "all-MiniLM-L6-v2"
+
+    # Optional: the user's name, so the assistant can greet them personally.
+    user_name: str | None = None
+
     # Model registry, parsed from config/models.yaml (see _load_models_config).
     models_config: dict = field(default_factory=dict)
 

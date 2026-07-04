@@ -47,12 +47,12 @@ def build():
     cfg = Settings.load()
 
     # --- Models ---
-    embedder = Embedder("your-embedding-model")
+    embedder = Embedder(cfg.embedding_model)
     reranker = Reranker()  # lazy cross-encoder; identity passthrough if absent
     registry = ModelRegistry(cfg.models_config, FrontierModel, LocalModel)
     # LLM extraction / contradiction / relation detection runs on the private
     # (local) model for privacy; degrades to heuristics when unreachable.
-    extractor = LLMExtractor(registry.get(registry.default_name("private")))
+    extractor = LLMExtractor(registry.local_private())
 
     # --- Stores ---
     episodic = EpisodicStore(cfg.episodic_db)
@@ -68,7 +68,7 @@ def build():
                                    extractor=extractor)
     consolidator = Consolidator(
         episodic=episodic, semantic=semantic, graph=graph,
-        summarizer=registry.get(registry.default_name("private")),
+        summarizer=registry.local_private(),
         half_life_days=cfg.recency_half_life_days,
     )
 
@@ -89,7 +89,7 @@ def build():
         memory=memory,
         router=Router(registry, policy, sensitive_scopes=cfg.sensitive_scopes),
         context_builder=ContextBuilder(),
-        skills=Skills(model=registry.get(registry.default_name("private")),
+        skills=Skills(model=registry.local_private(),
                       registry_dir=cfg.data_dir / "skills",
                       guardrails=guardrails, audit=audit),
         feedback=Feedback(path=cfg.data_dir / "feedback.jsonl"),
@@ -123,6 +123,7 @@ def main():
             run_repl(orchestrator, Session())
     finally:
         scheduler.stop()
+        orchestrator.memory.close()
 
 
 if __name__ == "__main__":

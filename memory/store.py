@@ -12,6 +12,7 @@ import time
 
 from memory import retrieval
 from memory.schema import ContextBundle, Source, Turn
+from memory.scope import is_sensitive_scope
 
 
 class MemoryStore:
@@ -43,9 +44,13 @@ class MemoryStore:
         self.write_async = write_async
 
     # --- READ ---------------------------------------------------------------
-    def retrieve(self, query: str, scope: str | None, budget_tokens: int | None = None) -> ContextBundle:
+    def retrieve(self, query: str, scope: str | None, budget_tokens: int | None = None,
+                 for_external: bool = False) -> ContextBundle:
         """Assemble the retrievers and run the pipeline. The retrievers are
-        thin adapters over the stores, so retrieval.py stays storage-agnostic."""
+        thin adapters over the stores, so retrieval.py stays storage-agnostic.
+
+        `for_external=True` (the answer is going to a non-local model) drops any
+        candidate from a sensitive scope before it can leave the machine."""
         retrievers = [
             _VectorRetriever(self.semantic),
             _KeywordRetriever(self.episodic),
@@ -61,6 +66,14 @@ class MemoryStore:
             now=time.time(),
             half_life_days=self.half_life_days,
         )
+        # Privacy: never ship sensitive-scope memory to an external model.
+        if for_external:
+            safe = [c for c in bundle.items if not is_sensitive_scope(c.scope)]
+            if len(safe) != len(bundle.items):
+                bundle.items = safe
+                bundle.provenance = [c.ref_id for c in safe]
+                bundle.token_count = sum(c.token_estimate or max(1, len(c.content) // 4)
+                                         for c in safe)
         # Reinforce what we actually used: bump importance / access stats so
         # frequently-useful memories resist decay (the other half of forgetting).
         for cand in bundle.items:
@@ -90,6 +103,15 @@ class MemoryStore:
         """Kick the background 'sleep' pass. Called by the scheduler."""
         self.consolidator.run()
 
+    def close(self) -> None:
+        for store in (self.episodic, self.semantic, self.graph, self.procedural):
+            closer = getattr(store, "close", None)
+            if callable(closer):
+                try:
+                    closer()
+                except Exception:
+                    pass
+
 
 # --- retriever adapters (store -> retrieval.Retriever) ----------------------
 # These translate each store's native call into the uniform Retriever shape the
@@ -117,9 +139,11 @@ class _GraphRetriever:
         self.graph = graph
 
     def search(self, query, scope, k):
-        # A real impl extracts entity mentions first; the simplest useful start
-        # is matching capitalised query tokens against known entity names.
-        entities = _entity_mentions(query)
+        # Prefer matching the query against KNOWN entity names (case-insensitive,
+        # multi-word) so read/write entity detection agree; fall back to the
+        # capitalised-token heuristic only if the store can't do it.
+        finder = getattr(self.graph, "entities_in_text", None)
+        entities = finder(query, scope) if callable(finder) else _entity_mentions(query)
         if not entities:
             return []
         return self.graph.neighbors(entities, scope=scope, hops=2)[:k]

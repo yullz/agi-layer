@@ -133,7 +133,7 @@ class NativeSemanticStore:
     def search(self, query: str, scope=None, k: int = 20) -> list[RetrievalCandidate]:
         emb = self._embed(query)
         scored = sorted(
-            ((_cosine(emb, json.loads(r["embedding"] or "[]")), r) for r in self._current_rows(scope)),
+            ((_cosine(emb, json.loads(r["embedding"] or "[]")), r) for r in self._retrieval_rows(scope)),
             key=lambda x: x[0], reverse=True)
         out = []
         for rank, (sim, r) in enumerate(scored[:k]):
@@ -147,7 +147,7 @@ class NativeSemanticStore:
 
     def find_similar(self, item: MemoryItem, threshold: float = 0.9) -> list[MemoryItem]:
         emb = item.embedding or self._embed(item.content)
-        return [_row_to_item(r) for r in self._current_rows(item.scope)
+        return [_row_to_item(r) for r in self._scope_rows(item.scope)
                 if _cosine(emb, json.loads(r["embedding"] or "[]")) >= threshold]
 
     def touch(self, item_id: str) -> None:
@@ -170,7 +170,7 @@ class NativeSemanticStore:
         the hot search set. Returns the count archived."""
         now = time.time()
         archived = 0
-        for r in self._current_rows(None):
+        for r in self._all_rows():
             rec = recency_weight(now - float(r["last_accessed"] or now), half_life_days)
             if float(r["importance"] or 0.0) * rec < cold_threshold:
                 self.archive(r["id"])
@@ -178,21 +178,37 @@ class NativeSemanticStore:
         return archived
 
     def count_current(self, scope=None) -> int:
-        return len(self._current_rows(scope))
+        return len(self._scope_rows(scope))
+
+    def count_all(self) -> int:
+        return len(self._all_rows())
 
     # --- internals ----------------------------------------------------------
-    def _current_rows(self, scope):
+    def _retrieval_rows(self, scope):
+        """Items visible for retrieval in `scope`: that scope PLUS global (None).
+        A None scope therefore returns only global items — never every scope's
+        rows (which would leak sensitive project memory)."""
         with self._lock:
-            if scope is None:
-                return self._db.execute(
-                    "SELECT * FROM items WHERE superseded_by IS NULL AND archived=0").fetchall()
             return self._db.execute(
-                "SELECT * FROM items WHERE superseded_by IS NULL AND archived=0 AND scope IS ?",
-                (scope,)).fetchall()
+                "SELECT * FROM items WHERE superseded_by IS NULL AND archived=0 "
+                "AND (scope IS ? OR scope IS NULL)", (scope,)).fetchall()
+
+    def _scope_rows(self, scope):
+        """Items strictly in `scope` — for reconcile/dedup and counts (a project
+        fact must not dedup against a global one)."""
+        with self._lock:
+            return self._db.execute(
+                "SELECT * FROM items WHERE superseded_by IS NULL AND archived=0 "
+                "AND scope IS ?", (scope,)).fetchall()
+
+    def _all_rows(self):
+        with self._lock:
+            return self._db.execute(
+                "SELECT * FROM items WHERE superseded_by IS NULL AND archived=0").fetchall()
 
     def _nearest(self, emb, scope):
         best, best_sim = None, -1.0
-        for r in self._current_rows(scope):
+        for r in self._scope_rows(scope):
             sim = _cosine(emb, json.loads(r["embedding"] or "[]"))
             if sim > best_sim:
                 best, best_sim = r, sim
@@ -218,10 +234,11 @@ def _normalize(vec):
 
 
 def _cosine(a, b):
-    n = min(len(a), len(b))
-    if n == 0:
+    # Different embedding spaces (e.g. 256-dim hash vs 384-dim real) are not
+    # comparable — never silently truncate to the shorter one.
+    if not a or not b or len(a) != len(b):
         return 0.0
-    return sum(a[i] * b[i] for i in range(n))  # inputs are L2-normalised
+    return sum(x * y for x, y in zip(a, b))  # inputs are L2-normalised
 
 
 def _kind(k):

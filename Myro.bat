@@ -22,10 +22,8 @@ if not defined PY (
 rem Make sure the app dependencies are present.
 "%PY%" -c "import fastapi" >nul 2>nul
 if errorlevel 1 (
-    echo First-time setup needed. Run this once in PowerShell, then try again:
-    echo    py -3.12 -m venv .venv
-    echo    .\.venv\Scripts\Activate.ps1
-    echo    pip install -e ".[serve]"
+    echo First-time setup needed. Double-click  Setup.bat  once - it installs
+    echo everything - then run Myro again.
     echo.
     echo Opening the terminal version instead for now...
     set AGI_INTERFACE=cli

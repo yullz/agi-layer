@@ -1188,6 +1188,16 @@ def main() -> int:
     check("web app page exists and wires the chat API",
           "/api/" in html and "chat" in html and "Myro" in html and "speechSynthesis" in html)
 
+    # one-shot install: the `all` extra bundles every superpower so a single
+    # `pip install -e ".[all]"` (or Setup.bat) sets Myro up fully.
+    import tomllib
+    with open(os.path.join(repo_root, "pyproject.toml"), "rb") as f:
+        _pp = tomllib.load(f)
+    _all = " ".join(_pp["project"]["optional-dependencies"].get("all", []))
+    check("pyproject '[all]' extra bundles the superpowers in one install",
+          all(k in _all for k in ("serve", "browser", "voice", "backup",
+                                  "schedule", "subscription")))
+
     # 36) backups — snapshot everything you built (Phase 25)
     print("\n36) backups")
     import tarfile as _tf

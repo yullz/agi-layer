@@ -58,6 +58,34 @@ def browser_ready() -> bool:
         return False
 
 
+def ollama_status(here: Path):
+    """Ollama runs AI models fully locally — a third way to give Myro a brain
+    with no subscription, no API key, and nothing leaving the machine. It's a
+    running *server*, not a Python package, so probe it over HTTP. Returns
+    (reachable, [model tags], endpoint)."""
+    import json
+    import urllib.request
+
+    endpoint = "http://localhost:11434"
+    # Honour a custom endpoint from config/models.yaml if we can read it.
+    try:
+        import yaml
+        cfg = yaml.safe_load((here / "config" / "models.yaml").read_text(encoding="utf-8"))
+        for entry in (cfg or {}).get("models", []):
+            if entry.get("adapter") == "local" and entry.get("endpoint"):
+                endpoint = str(entry["endpoint"]).rstrip("/")
+                break
+    except Exception:
+        pass
+    try:
+        with urllib.request.urlopen(f"{endpoint}/api/tags", timeout=0.8) as r:
+            body = json.loads(r.read().decode("utf-8"))
+        models = [m.get("name", "") for m in body.get("models", []) if m.get("name")]
+        return True, models, endpoint
+    except Exception:
+        return False, [], endpoint
+
+
 def line(ok: bool, label: str, fix: str = "") -> None:
     mark = f" {OK} " if ok else f" {NO} "
     tail = "" if ok else f"   -> {fix}"
@@ -104,13 +132,24 @@ def main() -> int:
     print("\nThe brain (need at least ONE for smart answers):")
     sub = have("claude_agent_sdk")
     fro = have("litellm")
+    oll_up, oll_models, oll_ep = ollama_status(here)
     line(sub, "Claude on your Pro/Max plan (subscription)",
-         'pip install -e ".[subscription]"')
-    line(fro, "Claude/GPT/Gemini via an API key (frontier)",
-         'pip install -e ".[frontier]"')
-    if not (sub or fro):
-        print(f"      [{DOT}] Neither installed — Myro still runs, but only echoes")
-        print("           back instead of thinking. Add one when you're ready.")
+         'pip install -e ".[subscription]"  then  claude login')
+    line(fro, "Claude / GPT / Gemini via an API key (frontier)",
+         'pip install -e ".[frontier]"  then set your API key')
+    if oll_up and oll_models:
+        shown = ", ".join(oll_models[:3]) + ("  ..." if len(oll_models) > 3 else "")
+        line(True, f"Local models via Ollama — running, {len(oll_models)} model(s): {shown}")
+    elif oll_up:
+        line(False, "Local models via Ollama — server running but no model pulled yet",
+             "ollama pull qwen3:14b")
+    else:
+        line(False, "Local models via Ollama — not running (fully offline brain)",
+             "install from ollama.com, then:  ollama pull qwen3:14b")
+    has_brain = sub or fro or (oll_up and bool(oll_models))
+    if not has_brain:
+        print(f"      [{DOT}] No brain yet — Myro still runs, but just echoes your")
+        print("           words back instead of thinking. Add any ONE of the three.")
 
     # --- Optional superpowers ---------------------------------------------
     print("\nSuperpowers (all optional — add only what you want):")
@@ -164,7 +203,10 @@ def main() -> int:
     elif not serve:
         print("  Result: Terminal Myro works. The WEB APP needs one more install.")
     else:
-        print("  Result: You're good to go! " + ("" if _UNI else "") + "Run:  python main.py")
+        print("  Result: You're good to go! Run:  python main.py")
+    if essentials_ok and not has_brain:
+        print("  Note:   No brain installed yet — he'll echo your words back until")
+        print("          you add one (subscription, API key, or a running Ollama).")
 
     if fixes:
         seen, ordered = set(), []

@@ -141,7 +141,8 @@ Add any of these whenever you want. Each is independent.
 ### 🌐 Browse the web (including logins & JavaScript pages)
 ```bash
 pip install -e ".[browser]"
-playwright install chromium
+python -m playwright install chromium   # the `python -m` form works even when
+                                        # a bare `playwright` command isn't found
 ```
 Now: *"search the web for…"*, *"browse this page and summarize it"*.
 

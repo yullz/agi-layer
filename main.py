@@ -12,7 +12,13 @@ Set a frontier key or start a local Ollama model to enable real generation.
 """
 from __future__ import annotations
 
+import os
+
 from config.settings import Settings
+from governance.audit import Audit
+from governance.guardrails import Guardrails
+from governance.versioning import Versioning
+from improvement.optimizer import Optimizer
 from core.context_builder import ContextBuilder
 from core.orchestrator import Orchestrator
 from core.policy import Policy
@@ -65,25 +71,40 @@ def build():
         budget_tokens=cfg.retrieval_budget_tokens,
     )
 
-    # --- Core ---
+    # --- Core + governance ---
     policy = Policy()
+    guardrails = Guardrails()
+    versioning = Versioning(cfg.data_dir / "versions")
+    audit = Audit(cfg.data_dir / "audit.jsonl")
     orchestrator = Orchestrator(
         memory=memory,
         router=Router(registry, policy, sensitive_scopes=cfg.sensitive_scopes),
         context_builder=ContextBuilder(),
         skills=Skills(),
-        feedback=Feedback(),
+        feedback=Feedback(path=cfg.data_dir / "feedback.jsonl"),
         retrieval_budget_tokens=cfg.retrieval_budget_tokens,
+        optimizer=Optimizer(),
+        policy=policy,
+        guardrails=guardrails,
+        versioning=versioning,
+        audit=audit,
     )
     return cfg, orchestrator
 
 
 def main():
     _cfg, orchestrator = build()
-    # TODO: start a background scheduler that calls memory.consolidate() on
-    #       cfg.consolidation_cron (APScheduler), and optionally serve
-    #       interfaces/api.py or interfaces/mcp.py instead of the CLI.
-    run_repl(orchestrator, Session())
+    # Choose an interface: cli (default) | api | mcp. (TODO: also start an
+    # APScheduler job calling memory.consolidate() on cfg.consolidation_cron.)
+    iface = os.environ.get("AGI_INTERFACE", "cli").lower()
+    if iface == "api":
+        from interfaces.api import build_app, serve
+        serve(build_app(orchestrator))
+    elif iface == "mcp":
+        from interfaces.mcp import build_mcp_server
+        build_mcp_server(orchestrator.memory, orchestrator).run()
+    else:
+        run_repl(orchestrator, Session())
 
 
 if __name__ == "__main__":

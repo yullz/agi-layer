@@ -37,6 +37,13 @@ class Orchestrator:
         # ROUTE FIRST — so retrieval can be destination-aware: if the answer is
         # going to a non-local model, sensitive-scope memory must be withheld.
         model = self.router.pick(user_input, None, scope=scope)
+        # If images are attached and the routed model can't see them, switch this
+        # turn to a reachable vision model (prefer local; never a cloud one for a
+        # sensitive scope) so attached images "just work".
+        if images and not getattr(model, "supports_vision", False):
+            vm = self._pick_vision_model(scope)
+            if vm is not None:
+                model = vm
         for_external = not getattr(model, "is_local", False)
 
         # READ — scoped, budget-packed, privacy-filtered context.
@@ -70,6 +77,33 @@ class Orchestrator:
         self.memory.write(Turn.from_session(session))
         self.feedback.observe(session, reply, model=model_name)
         return reply
+
+    def _pick_vision_model(self, scope):
+        """A reachable model that can actually see images — preferring a local
+        one; a cloud vision model only when the scope isn't sensitive. None if no
+        vision model is installed/reachable (images then degrade to a text note)."""
+        reg = getattr(self.router, "registry", None)
+        if reg is None:
+            return None
+
+        def reachable(m):
+            probe = getattr(m, "available", None)
+            try:
+                return (not callable(probe)) or bool(probe())
+            except Exception:
+                return False
+
+        vis = [reg.get(n) for n in reg.names()]
+        vis = [m for m in vis if m is not None
+               and getattr(m, "supports_vision", False) and reachable(m)]
+        local = [m for m in vis if getattr(m, "is_local", False)]
+        if local:
+            return local[0]
+        try:
+            sensitive = self.router._is_sensitive(scope)
+        except Exception:
+            sensitive = False
+        return vis[0] if (vis and not sensitive) else None
 
     def _agent_capable(self, model) -> bool:
         """Route conversational turns through the agent only when there's an

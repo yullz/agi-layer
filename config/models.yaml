@@ -32,6 +32,19 @@ models:
     privacy: local
     cost: free
 
+  # Local VISION model (Ollama) — lets Myro actually SEE images you attach,
+  # fully private. Pull one first, then Myro auto-uses it for image turns:
+  #   ollama pull llava              (7B, ~4.5GB — fits most GPUs)
+  #   ollama pull llama3.2-vision    (11B — sharper, fits a 16GB GPU)
+  - name: vision-local
+    adapter: local
+    model: llava                   # change to whichever vision model you pulled
+    endpoint: http://localhost:11434
+    context_window: 8000
+    capabilities: [vision]
+    privacy: local
+    cost: free
+
   # Offline, zero-dependency fallback — runs with no key/Ollama.
   - name: echo
     adapter: echo

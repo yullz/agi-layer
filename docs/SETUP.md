@@ -86,7 +86,7 @@ touches your memories.
 Want the deeper developer check too?
 
 ```bash
-python tests/smoke.py        # should print "All 217 checks PASS"
+python tests/smoke.py        # should print "All 219 checks PASS"
 ```
 
 If both look good, your install is healthy.
@@ -163,6 +163,17 @@ python -m playwright install chromium   # the `python -m` form works even when
                                         # a bare `playwright` command isn't found
 ```
 Now: *"search the web for…"*, *"browse this page and summarize it"*.
+
+### 👁️ Let Myro see images you attach (fully local & private)
+Attach images with the 📎 button in the app. For Myro to actually *see* them, run
+a local vision model in Ollama — then he auto-uses it for image messages:
+```bash
+ollama pull llava              # 7B, ~4.5GB — fits most GPUs
+# or, sharper on a 16GB+ GPU:  ollama pull llama3.2-vision
+```
+That's it — no config needed (Myro ships with a `vision-local` slot pointing at
+`llava`; change the tag in `config/models.yaml` if you pulled a different one).
+Text/document files work with **any** model, no vision needed.
 
 ### 🔊 Let Myro speak, and 🎤 talk to him
 ```bash

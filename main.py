@@ -109,8 +109,11 @@ def build():
     # Tools + a governed, model-agnostic tool-use loop, plus saved routines.
     # Every tool call is audited; write/exec tools are gated (confirm required),
     # and routines run unattended so those gated tools are denied fail-closed.
-    tools = build_default_tools(memory, allow_web=cfg.allow_web)
+    connectors = ({"git_repo": cfg.git_repo, "calendar_file": cfg.calendar_file,
+                   "mailbox_file": cfg.mailbox_file} if cfg.allow_connectors else None)
+    tools = build_default_tools(memory, allow_web=cfg.allow_web, connectors=connectors)
     orchestrator.tools = tools
+    orchestrator.connectors = connectors
     orchestrator.agent = Agent(router, tools, audit=audit)
     orchestrator.routines = Routines(cfg.data_dir / "routines.json", orchestrator.agent)
     return cfg, orchestrator

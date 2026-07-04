@@ -81,6 +81,14 @@ class Settings:
     # False for an air-gapped layer with no outbound HTTP from tools.
     allow_web: bool = True
 
+    # Connectors (git / calendar / email) — read your real world, locally. Set
+    # allow_connectors False to omit them entirely; otherwise the paths below are
+    # the defaults the connector tools use (each also accepts a path argument).
+    allow_connectors: bool = True
+    git_repo: str | None = None        # default repo for git_log/git_status (None -> ".")
+    calendar_file: str | None = None   # path to an .ics for calendar_upcoming
+    mailbox_file: str | None = None    # path to an mbox for email_recent
+
     # How often (seconds) the background tick checks for due scheduled routines.
     routine_tick_seconds: float = 60.0
 

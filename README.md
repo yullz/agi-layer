@@ -12,8 +12,12 @@ embeddings light it up further — nothing is required to start.
 ```bash
 python main.py                          # terminal: first boot asks a few questions, then chat
 AGI_INTERFACE=api python main.py        # or open the browser app (double-click Myro.bat on Windows)
-python tests/smoke.py                   # 191 offline checks prove the whole spine
+python tests/smoke.py                   # 192 offline checks prove the whole spine
 ```
+
+**Windows, zero fuss:** double-click **`Setup.bat`** once (installs everything —
+web app, browsing, voice, backups) then **`Myro.bat`** to run. Mac/Linux:
+`./setup.sh` then `./myro.sh`. One command for the lot: `pip install -e ".[all]"`.
 
 Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
 **[docs/SETUP.md](./docs/SETUP.md)** to switch on real models.

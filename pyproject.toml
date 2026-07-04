@@ -26,6 +26,11 @@ voice = ["pyttsx3"]                       # local text-to-speech for :voice (els
 voice-input = ["SpeechRecognition"]       # speech-to-text for :listen (+ a mic backend
                                           # like pyaudio, and openai-whisper or vosk)
 backup = ["cryptography"]                 # encrypt backups before they leave your machine
+# Everything in one go — all the superpowers plus both cloud-brain options, so a
+# single `pip install -e ".[all]"` (or a double-click of Setup.bat) sets Myro up
+# fully. The heavy/optional ML backends (rerank, mem0, dspy) stay separate so the
+# one-shot install stays fast and reliable; add them later if you want them.
+all = ["agi-layer[serve,browser,voice,voice-input,backup,schedule,subscription,frontier]"]
 dev = ["pytest", "ruff", "mypy"]
 
 [project.scripts]

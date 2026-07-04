@@ -24,6 +24,24 @@ If you need it, get it from **https://python.org/downloads** — on Windows, tic
 
 ## Step 2 — Get Myro running
 
+### ⚡ Easiest: install everything at once
+
+Want the whole thing — web app, web browsing, voice, backups, all of it — in one
+shot, no picking and choosing?
+
+- **🪟 Windows:** double-click **`Setup.bat`**. It builds Myro's workspace,
+  installs every superpower, downloads the browser, and shows a health check.
+  When it's done, double-click **`Myro.bat`** to start. That's the whole setup.
+- **🍎 Mac / 🐧 Linux:** run `chmod +x setup.sh && ./setup.sh`, then `./myro.sh`.
+
+The only thing that isn't bundled is Myro's *brain* (that's a personal choice) —
+see **Step 4**. Everything else is handled.
+
+> Prefer to install by hand, or want only some pieces? Use the manual steps
+> below instead — they do the same thing, one piece at a time.
+
+### 🔧 Manual (pick your pieces)
+
 Open a terminal in the Myro folder and follow **your** operating system. The
 commands are different on Windows vs Mac/Linux — use the right set!
 
@@ -68,7 +86,7 @@ touches your memories.
 Want the deeper developer check too?
 
 ```bash
-python tests/smoke.py        # should print "All 191 checks PASS"
+python tests/smoke.py        # should print "All 192 checks PASS"
 ```
 
 If both look good, your install is healthy.

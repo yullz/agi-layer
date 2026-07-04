@@ -29,7 +29,7 @@ class Orchestrator:
         self.versioning = versioning
         self.audit = audit
 
-    def handle_turn(self, user_input: str, session: Session) -> str:
+    def handle_turn(self, user_input: str, session: Session, confirm=None) -> str:
         session.add_user(user_input)
         scope = session.active_scope
 
@@ -41,18 +41,38 @@ class Orchestrator:
         # READ — scoped, budget-packed, privacy-filtered context.
         ctx = self.memory.retrieve(user_input, scope=scope,
                                    budget_tokens=self.budget, for_external=for_external)
+        messages = self.context_builder.build(session, ctx, model)
 
-        # ASSEMBLE + GENERATE (degrades to an on-box model on failure).
-        prompt = self.context_builder.build(session, ctx, model)
-        tools = self.skills.available(scope=scope)
-        model, reply = self.router.generate(model, prompt, tools=tools)
-        model_name = getattr(model, "model_name", None)
+        # ASSEMBLE + GENERATE. With a capable (tool-following) model wired to the
+        # agent, plain natural language runs through the conversational agent loop
+        # so the model can DECIDE to act (calling tools, gated ones via `confirm`)
+        # or just answer. Offline/echo degrades to a straight generate.
+        self.last_steps = []
+        if self._agent_capable(model):
+            result = self.agent.converse(messages, scope=scope, confirm=confirm)
+            reply = result.get("answer", "")
+            self.last_steps = result.get("steps", [])
+            used = result.get("model", model)
+        else:
+            used, reply = self.router.generate(
+                model, messages, tools=self.skills.available(scope=scope))
+
+        model_name = getattr(used, "model_name", None)
         session.add_assistant(reply, model=model_name)
 
         # WRITE + capture signal for the improvement loop.
         self.memory.write(Turn.from_session(session))
         self.feedback.observe(session, reply, model=model_name)
         return reply
+
+    def _agent_capable(self, model) -> bool:
+        """Route conversational turns through the agent only when there's an
+        agent wired AND the model can follow the tool protocol. The offline echo
+        model can't, so it uses the plain generate path (today's behavior)."""
+        if getattr(self, "agent", None) is None or getattr(self, "tools", None) is None:
+            return False
+        name = (getattr(model, "model_name", "") or "").lower()
+        return name != "echo"
 
     def optimize(self) -> dict:
         """One governed self-improvement step: propose a better routing policy

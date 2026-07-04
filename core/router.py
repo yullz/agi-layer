@@ -12,10 +12,10 @@ take precedence for the non-sensitive path.
 from __future__ import annotations
 
 from memory.schema import ContextBundle
+from memory.scope import is_sensitive_scope
 
 _HARD_HINTS = ("why", "how", "design", "analyze", "analyse", "explain", "prove",
                "debug", "compare", "plan", "architect", "refactor", "optimize")
-_SENSITIVE_HINTS = ("private", "sensitive", "health", "medical", "finance", "personal")
 
 
 class Router:
@@ -39,12 +39,20 @@ class Router:
 
     # --- classification -----------------------------------------------------
     def _is_sensitive(self, scope: str | None) -> bool:
-        if not scope:
-            return False
-        if scope in self.sensitive_scopes:
-            return True
-        s = scope.lower()
-        return any(t in s for t in _SENSITIVE_HINTS)
+        return is_sensitive_scope(scope, self.sensitive_scopes)
+
+    def generate(self, model, prompt, tools=None):
+        """Call `model`; if it errors (bad key, stalled Ollama, junk response),
+        fall back to an on-box model — NEVER a cloud one — so a turn degrades
+        instead of aborting. Returns (model_used, reply)."""
+        try:
+            return model, (model.generate(prompt, tools=tools) or "")
+        except Exception:
+            fb = self._reachable_local()
+            try:
+                return fb, (fb.generate(prompt, tools=tools) or "")
+            except Exception:
+                return fb, "I couldn't reach a model just now — mind trying again?"
 
     def _classify(self, query: str) -> str:
         q = (query or "").lower()

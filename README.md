@@ -1,41 +1,56 @@
 # agi-layer
 
-A local, personal intelligence layer — a persistent memory + multi-model
-orchestration hub you run on your own machine. One process that knows you
-deeply, never forgets, routes across every model (frontier + local), and
-improves the longer you use it.
+A local-first **personal intelligence layer** — a persistent memory + multi-model
+orchestration hub you run on your own machine. One process that remembers you
+across sessions, keeps sensitive things on your box, routes across models
+(frontier + local), and gets sharper the more you use it.
 
-Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** first — it's the full design and
-the reference every stub points back to.
+It **runs today**, fully offline, with zero external services. Real models and
+embeddings light it up further — nothing is required to start.
 
-## What's in the box
+```bash
+python main.py        # then :seed, then just talk to it
+python tests/smoke.py # 42 offline checks prove the whole spine
+```
 
-This is a scaffold. The design-carrying pieces are implemented; the rest are
-contract stubs with docstrings detailed enough to hand straight to Claude Code.
+Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
+**[docs/SETUP.md](./docs/SETUP.md)** to switch on real models.
 
-**Implemented:**
-- `memory/schema.py` — the full data model (every dataclass the system uses)
-- `memory/retrieval.py` — the retrieval-and-ranking pipeline (fusion + rerank + budget packing), the highest-leverage code
-- `memory/store.py` — the `MemoryStore` facade and its retriever adapters
-- `core/orchestrator.py` — the turn loop
-- `core/session.py` — working memory
-- `main.py` — the composition root that wires everything
+## What it does
 
-**Contract stubs (raise `NotImplementedError` with a spec in the docstring):**
-- stores: `episodic`, `semantic`, `graph`, `procedural`
-- `memory/write_path.py`, `memory/consolidation.py` (rich contracts)
-- `models/*`, `improvement/*`, `governance/*`, `interfaces/*`, `core/router.py`, `core/context_builder.py`
+- **Remembers you.** Every turn is logged (episodic, SQLite+FTS5); durable facts
+  are distilled into an owned vector store with **reconcile-on-write** (dedup +
+  supersede contradictions), a **forgetting curve** (reinforce + decay), and a
+  self-populating **knowledge graph** of typed relations.
+- **Retrieves what matters.** Four retrievers (vector + keyword + graph +
+  recency) fused with Reciprocal Rank Fusion, reranked, and packed to a token
+  budget. Scoped per project, with global/identity facts always available.
+- **Keeps secrets local.** Scope-aware routing sends sensitive scopes to an
+  on-box model only; sensitive memory is never packed into a prompt bound for a
+  cloud model. Extraction, summarization, and skill-authoring all run on-box.
+- **Routes across models.** Claude on your Pro/Max **subscription** (via the
+  Claude Agent SDK), local **Qwen** via Ollama, and a zero-dependency **echo**
+  fallback so it always runs. Auto-selects the first reachable backend and
+  degrades gracefully if one fails mid-turn.
+- **Improves under governance.** Feedback → a routing optimizer (GEPA-ready),
+  gated by fail-closed guardrails, snapshot/rollback, and an audit log.
+- **Is a bridge.** Exposes `ask` / `retrieve_memory` / `remember` over **MCP** so
+  your other agents share this brain (`AGI_INTERFACE=mcp`), plus a localhost HTTP
+  API (`AGI_INTERFACE=api`).
 
 ## Layout
 
 ```
 agi-layer/
-├── ARCHITECTURE.md      <- read this first
-├── core/                the orchestration core (the bridge)
-├── memory/              the spine: schema, stores, write path, retrieval, consolidation
-├── models/              frontier + local adapters, embeddings, reranker
-├── improvement/         feedback, optimizer, skills, finetune
-├── governance/          audit, guardrails, versioning
+├── ARCHITECTURE.md      the full design
+├── docs/                SETUP + per-phase notes + REVIEW (known follow-ups)
+├── core/                orchestrator, router (scope-aware), context builder, scheduler
+├── memory/              schema, episodic, native vector store, graph, retrieval,
+│                        write path, consolidation, extractor, scope, seed
+├── models/              agent_sdk (subscription), local (Ollama), frontier (API),
+│                        echo, embeddings, reranker, registry
+├── improvement/         feedback, optimizer, gepa_optimizer, skills (self-authoring)
+├── governance/          audit, guardrails (fail-closed), versioning
 ├── interfaces/          cli, api, mcp
 ├── config/              settings + models.yaml
 ├── data/                your memory lives here (gitignored)
@@ -45,25 +60,17 @@ agi-layer/
 ## Quickstart
 
 ```bash
-python -m venv .venv
-# Windows PowerShell:
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\Activate.ps1
+pip install -e .            # or: pip install -r requirements.txt
+python main.py              # REPL — runs on the offline echo model out of the box
 ```
 
-`python main.py` will raise `NotImplementedError` from the first store it
-constructs — expected. Implement the stubs in build order and the same wiring
-comes to life.
+At the prompt: `:seed` loads what we already know about you, `:memory` shows it,
+`:help` lists commands. To turn on real intelligence (Claude on your plan, local
+Qwen, real embeddings), see **[docs/SETUP.md](./docs/SETUP.md)**.
 
-## Build order
+## Status
 
-1. **Spine** — implement `episodic` + `semantic` (pick one vector store) + one frontier + one local model. `retrieval.py` already works once the retrievers return candidates.
-2. **Prove it learns you** — after ~a week, check retrieval surfaces the right context unprompted.
-3. **The loop** — wire `feedback` → `optimizer`, add nightly `consolidation` (start with summarize + decay).
-4. **Then** — `graph`, skill self-authoring, `finetune`, and `governance`.
-
-## The bridge
-
-`interfaces/mcp.py` exposes memory + routing as MCP tools, so other agents
-connect to this as their shared memory-and-routing hub — that's what makes it
-the layer between all your AIs rather than just another assistant.
+Every architecture layer is implemented and covered by the offline smoke test.
+Known follow-ups from the code review live in **[docs/REVIEW.md](./docs/REVIEW.md)**.
+The one intentional stub is `improvement/finetune.py` (LoRA, opt-in and heavy).

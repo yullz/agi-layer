@@ -77,6 +77,19 @@ class ModelRegistry:
     def names(self) -> list[str]:
         return list(self._adapters)
 
+    def local_private(self):
+        """The on-box model for extraction / summarization / skills. The
+        configured private default if it's actually local, else any local model,
+        else echo — so these paths can never reach a cloud model."""
+        name = self._defaults.get("private")
+        m = self._adapters.get(name) if name else None
+        if m is not None and getattr(m, "is_local", False):
+            return m
+        for adapter in self._adapters.values():
+            if getattr(adapter, "is_local", False):
+                return adapter
+        return self._adapters.get("echo")
+
     def candidates(self, *, needs: set | None = None, max_cost: float | None = None):
         """Return adapters matching capability/cost constraints, for the router."""
         out = []

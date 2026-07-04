@@ -13,3 +13,19 @@ __pycache__/
 venv/
 *.egg-info/
 .DS_Store
+
+# Tooling / build caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg
+.coverage
+htmlcov/
+
+# Memory artifacts (normally under data/, but ignore anywhere in case relocated)
+skills/
+versions/
+*.jsonl
+*.consolidation.json

@@ -31,22 +31,25 @@ class Orchestrator:
 
     def handle_turn(self, user_input: str, session: Session) -> str:
         session.add_user(user_input)
+        scope = session.active_scope
 
-        # READ — pull scoped, budget-packed context from memory.
-        ctx = self.memory.retrieve(
-            user_input, scope=session.active_scope, budget_tokens=self.budget)
+        # ROUTE FIRST — so retrieval can be destination-aware: if the answer is
+        # going to a non-local model, sensitive-scope memory must be withheld.
+        model = self.router.pick(user_input, None, scope=scope)
+        for_external = not getattr(model, "is_local", False)
 
-        # ROUTE + ASSEMBLE — pick a model (scope-aware), build the prompt.
-        model = self.router.pick(user_input, ctx, scope=session.active_scope)
+        # READ — scoped, budget-packed, privacy-filtered context.
+        ctx = self.memory.retrieve(user_input, scope=scope,
+                                   budget_tokens=self.budget, for_external=for_external)
+
+        # ASSEMBLE + GENERATE (degrades to an on-box model on failure).
         prompt = self.context_builder.build(session, ctx, model)
-
-        # GENERATE — the tool loop lives inside the model adapter.
-        reply = model.generate(
-            prompt, tools=self.skills.available(scope=session.active_scope))
+        tools = self.skills.available(scope=scope)
+        model, reply = self.router.generate(model, prompt, tools=tools)
         model_name = getattr(model, "model_name", None)
         session.add_assistant(reply, model=model_name)
 
-        # WRITE (async) + capture signal for the improvement loop.
+        # WRITE + capture signal for the improvement loop.
         self.memory.write(Turn.from_session(session))
         self.feedback.observe(session, reply, model=model_name)
         return reply

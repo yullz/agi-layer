@@ -1,34 +1,25 @@
-# Suggested dependencies — pin versions when you install.
-# The design is deliberately swappable; nothing here is load-bearing
-# except LiteLLM (routing) and whatever vector store you settle on.
+# agi-layer runs with NO dependencies on the offline echo backend + hashing
+# embeddings. Install only what you want to switch on. Prefer `pip install -e .`
+# with extras (see pyproject.toml); this file is the flat equivalent.
 
-# Multi-model routing (keeps every provider behind one call)
-litellm
+# --- core (always) ---
+pyyaml>=6
 
-# Config
-pyyaml
+# --- turn on real models (pick what you use) ---
+claude-agent-sdk        # Claude on your Pro/Max subscription (the default backend)
+# litellm               # Claude/GPT/Gemini via an API key (overflow / alternative)
+# Local models use Ollama's HTTP API directly (no Python client needed).
 
-# Local models (Ollama is the easiest start; vLLM for throughput)
-ollama
+# --- turn on real embeddings + reranking ---
+# sentence-transformers # local embeddings (all-MiniLM) + cross-encoder reranker
 
-# Hybrid memory engine — extraction + dedup + vector search behind MemoryStore
-mem0ai
+# --- optional hybrid semantic backend (native is the default) ---
+# mem0ai
+# chromadb
 
-# Vector store (used by Mem0, or directly if you roll your own) — pick ONE:
-chromadb
-# sqlite-vec        # zero-infra, can live in your episodic .db file
-# lancedb           # columnar, good when memory gets large
-
-# Embeddings + cross-encoder reranker
-sentence-transformers
-
-# Prompt/routing optimization loop
-dspy-ai
-
-# Background scheduler for consolidation
-apscheduler
-
-# Interfaces (optional)
-fastapi
-uvicorn
-mcp
+# --- optional: prompt/routing optimization, scheduler, interfaces ---
+# dspy-ai               # GEPA optimizer
+# apscheduler           # cron-accurate consolidation (stdlib timer fallback otherwise)
+# fastapi               # HTTP API  (AGI_INTERFACE=api)
+# uvicorn
+# mcp                   # MCP bridge (AGI_INTERFACE=mcp)

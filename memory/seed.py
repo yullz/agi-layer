@@ -10,6 +10,8 @@ query at the global scope, to surface them.
 """
 from __future__ import annotations
 
+import hashlib
+
 from memory.schema import ItemKind, MemoryItem
 
 # Durable facts about the user (edit/extend as you like).
@@ -46,7 +48,10 @@ def seed_memory(memory, scope: str | None = None) -> dict:
     if semantic is not None and hasattr(semantic, "upsert"):
         for content in SEED_FACTS:
             try:
-                semantic.upsert(MemoryItem(content=content, kind=ItemKind.FACT,
+                # Deterministic id so re-seeding overwrites in place (idempotent)
+                # instead of piling up duplicate copies of every fact.
+                sid = "seed-" + hashlib.md5(f"{content}|{scope}".encode("utf-8")).hexdigest()[:24]
+                semantic.upsert(MemoryItem(id=sid, content=content, kind=ItemKind.FACT,
                                            scope=scope, importance=0.8))
                 facts += 1
             except Exception:

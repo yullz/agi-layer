@@ -91,15 +91,10 @@ class EpisodicStore:
         with self._lock:
             if not terms:
                 source = Source.RECENCY
-                if scope:
-                    rows = self._db.execute(
-                        "SELECT * FROM episodes WHERE scope IS ? ORDER BY ts DESC LIMIT ?",
-                        (scope, limit),
-                    ).fetchall()
-                else:
-                    rows = self._db.execute(
-                        "SELECT * FROM episodes ORDER BY ts DESC LIMIT ?", (limit,)
-                    ).fetchall()
+                rows = self._db.execute(
+                    "SELECT * FROM episodes WHERE (scope IS ? OR scope IS NULL) "
+                    "ORDER BY ts DESC LIMIT ?", (scope, limit),
+                ).fetchall()
             else:
                 source = Source.KEYWORD
                 rows = self._keyword_rows(terms, scope, limit)
@@ -110,29 +105,26 @@ class EpisodicStore:
         if self._fts and tokens:
             try:
                 match = " OR ".join(tokens)
-                if scope:
-                    return self._db.execute(
-                        "SELECT e.* FROM episodes_fts f JOIN episodes e ON e.id=f.id "
-                        "WHERE episodes_fts MATCH ? AND e.scope IS ? ORDER BY rank LIMIT ?",
-                        (match, scope, limit),
-                    ).fetchall()
                 return self._db.execute(
                     "SELECT e.* FROM episodes_fts f JOIN episodes e ON e.id=f.id "
-                    "WHERE episodes_fts MATCH ? ORDER BY rank LIMIT ?",
-                    (match, limit),
+                    "WHERE episodes_fts MATCH ? AND (e.scope IS ? OR e.scope IS NULL) "
+                    "ORDER BY rank LIMIT ?", (match, scope, limit),
                 ).fetchall()
             except sqlite3.OperationalError:
                 pass  # fall through to LIKE
         tokens = tokens or [terms]
         clause = " OR ".join(["content LIKE ?"] * len(tokens))
         params: list = [f"%{t}%" for t in tokens]
-        sql = f"SELECT * FROM episodes WHERE ({clause})"
-        if scope:
-            sql += " AND scope IS ?"
-            params.append(scope)
-        sql += " ORDER BY ts DESC LIMIT ?"
-        params.append(limit)
+        sql = (f"SELECT * FROM episodes WHERE ({clause}) "
+               "AND (scope IS ? OR scope IS NULL) ORDER BY ts DESC LIMIT ?")
+        params += [scope, limit]
         return self._db.execute(sql, params).fetchall()
+
+    def close(self) -> None:
+        try:
+            self._db.close()
+        except Exception:
+            pass
 
     def iter_since(self, ts: float):
         """Walk new episodes — used by consolidation."""

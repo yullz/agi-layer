@@ -77,8 +77,8 @@ def score_final(
     now: float,
     half_life_days: float,
     w_relevance: float = 1.0,
-    w_importance: float = 0.6,
-    w_recency: float = 0.4,
+    w_importance: float = 0.3,
+    w_recency: float = 0.2,
     w_rerank: float = 1.0,
 ) -> float:
     """Blend relevance (fusion), rerank signal, importance, and recency into one
@@ -178,6 +178,14 @@ def retrieve(
 
     # 2. Fuse heterogeneous rankings into one list (rank-based, scale-free).
     fused = reciprocal_rank_fusion(lists, k=rrf_k)
+
+    # Rank-normalise fused relevance into [0, 1] so it is comparable with
+    # importance/recency in score_final. Raw RRF magnitudes are ~1/60 and would
+    # otherwise be swamped by importance (~0.6) + recency (~0.4), making ranking
+    # ignore relevance almost entirely.
+    n = len(fused)
+    for idx, cand in enumerate(fused):
+        cand.fused_score = 1.0 - (idx / (n - 1)) if n > 1 else 1.0
 
     # 3. Rerank the fused list for true query relevance (optional, graceful).
     if reranker is not None:

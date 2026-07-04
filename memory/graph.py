@@ -63,7 +63,8 @@ class GraphStore:
         the graph stays deduped by name+scope and relations stay stable."""
         with self._lock:
             row = self._db.execute(
-                "SELECT id FROM entities WHERE name=? AND scope IS ?", (name, scope)).fetchone()
+                "SELECT id FROM entities WHERE lower(name)=lower(?) AND scope IS ?",
+                (name, scope)).fetchone()
             if row:
                 return row["id"]
             ent = Entity(name=name, type=type, scope=scope)
@@ -108,10 +109,9 @@ class GraphStore:
                 marks = ",".join("?" * len(frontier))
                 params = list(frontier) + list(frontier)
                 sql = (f"SELECT * FROM relations WHERE superseded_by IS NULL AND "
-                       f"(src IN ({marks}) OR dst IN ({marks}))")
-                if scope:
-                    sql += " AND scope IS ?"
-                    params.append(scope)
+                       f"(src IN ({marks}) OR dst IN ({marks})) "
+                       f"AND (scope IS ? OR scope IS NULL)")
+                params.append(scope)
                 nxt = set()
                 for rel in self._db.execute(sql, params).fetchall():
                     rels[rel["id"]] = rel
@@ -130,8 +130,26 @@ class GraphStore:
                        f"—{rel['type']}→ {names.get(rel['dst'], rel['dst'])}")
             out.append(RetrievalCandidate(
                 ref_id=rel["id"], content=content, source=Source.GRAPH,
-                scope=rel["scope"], token_estimate=max(1, len(content) // 4)))
+                scope=rel["scope"], created_at=float(rel["valid_from"] or 0.0),
+                importance=0.6, token_estimate=max(1, len(content) // 4)))
         return out
+
+    def entities_in_text(self, text, scope=None) -> list[str]:
+        """Known entity names that appear (case-insensitive) in text — the read
+        side of graph retrieval, so read/write entity detection agree and
+        multi-word / lowercase names match."""
+        low = (text or "").lower()
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT DISTINCT name FROM entities WHERE (scope IS ? OR scope IS NULL)",
+                (scope,)).fetchall()
+        return [r["name"] for r in rows if r["name"] and r["name"].lower() in low]
+
+    def close(self) -> None:
+        try:
+            self._db.close()
+        except Exception:
+            pass
 
     def merge_entities(self, keep_id: str, drop_id: str) -> None:
         """Repoint drop_id's relations onto keep_id and delete the duplicate."""
@@ -144,10 +162,7 @@ class GraphStore:
     def _find_entities(self, names: list[str], scope: str | None):
         out = []
         for nm in names:
-            if scope:
-                out.extend(self._db.execute(
-                    "SELECT * FROM entities WHERE name=? AND scope IS ?", (nm, scope)).fetchall())
-            else:
-                out.extend(self._db.execute(
-                    "SELECT * FROM entities WHERE name=?", (nm,)).fetchall())
+            out.extend(self._db.execute(
+                "SELECT * FROM entities WHERE lower(name)=lower(?) "
+                "AND (scope IS ? OR scope IS NULL)", (nm, scope)).fetchall())
         return out

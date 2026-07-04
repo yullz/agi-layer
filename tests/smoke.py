@@ -1122,6 +1122,7 @@ def main() -> int:
     worch.connectors = {"git_repo": repo_root}
     worch.routines = _RT(os.path.join(tmp, "web_rt.json"), Agent(_ScriptRouter([]), wtl))
     worch.onboarding = _OB(os.path.join(tmp, "web_onb.json"))
+    worch.onboarding.complete({"name": "Yulian"})   # already onboarded: test the tool path
     wa = WebApp(worch)
     cres = wa.chat("show my latest commit", sid="s1", allow_actions=True)
     check("web chat returns a reply with tool steps",
@@ -1152,9 +1153,34 @@ def main() -> int:
     gorch = _orch(gr, gtl, Agent(gr, gtl), "webg")
     gorch.routines = _RT(os.path.join(tmp, "wg.json"), Agent(_ScriptRouter([]), gtl))
     gorch.onboarding = _OB(os.path.join(tmp, "wg_onb.json"))
+    gorch.onboarding.complete({})                    # skip the intro for this test
     dres = WebApp(gorch).chat("add an event", allow_actions=False)
     check("web read-only mode denies gated actions",
           any(s["tool"] == "calendar_add_event" and s["denied"] for s in dres["steps"]))
+
+    # web onboarding parity: first message starts the interview, answers step
+    # through, 'stop' finishes + marks it done, and it re-runs on a plain request.
+    fob = _OB(os.path.join(tmp, "web_onb2.json"))
+    ftl = _bdt(None, allow_web=False)
+    forch = _orch(_ScriptRouter([]), ftl, Agent(_ScriptRouter([]), ftl), "webob")
+    forch.routines = _RT(os.path.join(tmp, "web_rt2.json"), Agent(_ScriptRouter([]), ftl))
+    forch.onboarding = fob
+    wob = WebApp(forch)
+    o_first = wob.chat("hey there", sid="o1")
+    check("web onboarding auto-starts on the first message",
+          bool(o_first.get("onboarding")) and "[1/" in o_first["reply"])
+    o_name = wob.chat("Yulian", sid="o1")
+    check("web onboarding advances to the next question after an answer",
+          "[2/" in o_name["reply"])
+    o_stop = wob.chat("stop", sid="o1")
+    check("web onboarding finishes on 'stop', marks done + remembers the name",
+          fob.is_done() and fob.name() == "Yulian" and "great start" in o_stop["reply"])
+    o_after = wob.chat("what can you do", sid="o2")
+    check("web onboarding does not re-trigger once done", not o_after.get("onboarding"))
+    o_rerun = wob.chat("can you ask me the introduction question to get to know me better",
+                       sid="o3")
+    check("web onboarding re-runs on a natural-language request",
+          bool(o_rerun.get("onboarding")) and "[1/" in o_rerun["reply"])
 
     idx = os.path.join(repo_root, "interfaces", "static", "index.html")
     with open(idx, encoding="utf-8") as f:

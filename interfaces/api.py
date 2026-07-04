@@ -55,6 +55,9 @@ def build_app(orchestrator, store=None):
         scope: str | None = None
         spec: str | None = None
 
+    class SidIn(BaseModel):
+        sid: str = "default"
+
     # --- the app page ---
     @app.get("/")
     def index():
@@ -65,6 +68,10 @@ def build_app(orchestrator, store=None):
     def chat(body: ChatIn):
         return web.chat(body.text, sid=body.sid, scope=body.scope,
                         allow_actions=body.allow_actions)
+
+    @app.post("/api/onboarding/start")
+    def onboarding_start(body: SidIn):
+        return web.start_onboarding(body.sid)
 
     @app.get("/api/status")
     def status(sid: str = "default"):

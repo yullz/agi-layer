@@ -77,6 +77,13 @@ class Settings:
     # Optional: the user's name, so the assistant can greet them personally.
     user_name: str | None = None
 
+    # Web/browser tools for the agent (web_search + hardened web_fetch). Set
+    # False for an air-gapped layer with no outbound HTTP from tools.
+    allow_web: bool = True
+
+    # How often (seconds) the background tick checks for due scheduled routines.
+    routine_tick_seconds: float = 60.0
+
     # Model registry, parsed from config/models.yaml (see _load_models_config).
     models_config: dict = field(default_factory=dict)
 

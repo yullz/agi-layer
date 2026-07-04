@@ -34,9 +34,10 @@ Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
   degrades gracefully if one fails mid-turn.
 - **Does tasks, not just talk.** A governed, model-agnostic **agent loop**
   (`:do <task>`) reasons in steps and calls **tools** (read files, calc, search
-  memory, run a command) to actually get things done. Write/exec tools are gated
-  (confirm required) and every call is audited; **routines** (`:automate` /
-  `:run`) save tasks and run them unattended, fail-closed.
+  memory, **search & fetch the web**, run a command) to actually get things done.
+  Write/exec tools are gated (confirm required) and every call is audited;
+  **routines** (`:automate` / `:run`) save tasks and run them unattended,
+  fail-closed — and can run **on a schedule** (`:schedule morning at 08:00`).
 - **Improves under governance.** Feedback → a routing optimizer (GEPA-ready),
   gated by fail-closed guardrails, snapshot/rollback, and an audit log.
 - **Is a bridge.** Exposes `ask` / `retrieve_memory` / `remember` over **MCP** so

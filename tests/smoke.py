@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -460,6 +461,52 @@ def main() -> int:
     check("routine runs unattended", rres["status"] == "ran" and rres["answer"] == "4")
     routines2 = Routines(os.path.join(tmp, "routines.json"), agent_c)
     check("routines persist across restart", "mathcheck" in routines2.list())
+
+    # 20) web/browser tools + scheduled routines (Phase 12)
+    print("\n20) web tools + scheduled routines")
+    from core.tools import (_html_to_text, _parse_ddg, _web_fetch,
+                            build_default_tools as _bdt)
+    web_names = _bdt(None, allow_web=True).names()
+    check("web tools registered when allowed",
+          "web_search" in web_names and "web_fetch" in web_names)
+    check("web tools omitted when disallowed",
+          "web_fetch" not in _bdt(None, allow_web=False).names())
+    # SSRF guard: private/loopback + non-http schemes are blocked (no network).
+    check("web_fetch blocks loopback (SSRF guard)",
+          "blocked" in _web_fetch({"url": "http://127.0.0.1:80/admin"}))
+    check("web_fetch blocks non-http schemes",
+          "blocked" in _web_fetch({"url": "file:///etc/passwd"}))
+    check("html is reduced to readable text",
+          _html_to_text("<p>Hello <b>there</b></p><script>x=1</script>") == "Hello there")
+    ddg = _parse_ddg('<a class="result__a" href="//duckduckgo.com/l/'
+                     '?uddg=https%3A%2F%2Fexample.com%2Fa&rut=z">Example A</a>')
+    check("search results parse to (title, url)",
+          ddg == [("Example A", "https://example.com/a")])
+
+    # interval scheduling: due only after next_run, then advances
+    sagent = Agent(_ScriptRouter(['{"final": "ok"}']), a_tools)
+    sr = Routines(os.path.join(tmp, "sched.json"), sagent)
+    sr.add("tick", "return ok")
+    sr.schedule("tick", every_minutes=30, now=1000.0)   # next_run = 2800
+    check("scheduled routine not due before its time", not sr.run_due(now=2000.0))
+    fired = sr.run_due(now=3000.0)                       # due -> fires
+    check("scheduled routine fires when due",
+          any(f["name"] == "tick" and f["answer"] == "ok" for f in fired))
+    check("next run advances after firing", sr.list()["tick"]["next_run"] == 4800.0)
+    sr2 = Routines(os.path.join(tmp, "sched.json"), sagent)
+    check("schedule persists across restart", sr2.list()["tick"].get("every_minutes") == 30)
+
+    # daily 'at HH:MM' scheduling: fires once per day at/after the time
+    dagent = Agent(_ScriptRouter([]), a_tools)  # scripts exhausted -> final "done"
+    dr = Routines(os.path.join(tmp, "daily.json"), dagent)
+    dr.add("brief", "daily briefing")
+    base = 1_700_000_000.0
+    lt = time.localtime(base)
+    dr.schedule("brief", at=f"{lt.tm_hour:02d}:{lt.tm_min:02d}")
+    check("daily routine fires at its time",
+          any(f["name"] == "brief" for f in dr.run_due(now=base)))
+    check("daily routine doesn't refire the same day",
+          not any(f["name"] == "brief" for f in dr.run_due(now=base + 60)))
 
     print()
     if all(_results):

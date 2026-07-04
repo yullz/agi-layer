@@ -109,7 +109,7 @@ def build():
     # Tools + a governed, model-agnostic tool-use loop, plus saved routines.
     # Every tool call is audited; write/exec tools are gated (confirm required),
     # and routines run unattended so those gated tools are denied fail-closed.
-    tools = build_default_tools(memory)
+    tools = build_default_tools(memory, allow_web=cfg.allow_web)
     orchestrator.tools = tools
     orchestrator.agent = Agent(router, tools, audit=audit)
     orchestrator.routines = Routines(cfg.data_dir / "routines.json", orchestrator.agent)
@@ -123,6 +123,11 @@ def main():
     from core.scheduler import Scheduler
     scheduler = Scheduler(orchestrator.memory.consolidate, cron=cfg.consolidation_cron)
     scheduler.start()
+    # Minute-tick that fires any scheduled routines that are due (time-based
+    # automation). run_due() is a cheap no-op when nothing is scheduled.
+    routine_tick = Scheduler(orchestrator.routines.run_due, cron="* * * * *",
+                             interval_seconds=cfg.routine_tick_seconds)
+    routine_tick.start()
     try:
         # Choose an interface: cli (default) | api | mcp.
         iface = os.environ.get("AGI_INTERFACE", "cli").lower()
@@ -135,6 +140,7 @@ def main():
         else:
             run_repl(orchestrator, Session())
     finally:
+        routine_tick.stop()
         scheduler.stop()
         orchestrator.memory.close()
 

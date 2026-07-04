@@ -8,10 +8,15 @@ agent loop enforces that and audits every call.
 from __future__ import annotations
 
 import ast
+import ipaddress
 import operator
 import os
+import re
+import socket
 import subprocess
 import time
+import urllib.parse
+import urllib.request
 
 
 class Tool:
@@ -106,7 +111,110 @@ def _run_shell(args):
         return f"(error: {e})"
 
 
-def build_default_tools(memory=None) -> ToolRegistry:
+# --- web / browser tools ----------------------------------------------------
+# Reading the public web is genuinely useful (news, docs, weather) and is a
+# read-only outbound GET, so these are `unattended` — automations can use them.
+# But the network is a real attack surface, so web_fetch is hardened: http/https
+# only, an SSRF guard that blocks localhost/private/link-local targets (even when
+# a hostname *resolves* to one), a byte cap, and a short timeout. Turn the whole
+# capability off with allow_web=False if you want an air-gapped layer.
+_WEB_MAX_BYTES = 400_000
+_WEB_MAX_CHARS = 6_000
+_UA = "Mozilla/5.0 (compatible; agi-layer/1.0)"
+
+
+def _safe_url(url: str):
+    try:
+        p = urllib.parse.urlparse(url)
+    except Exception:
+        return False, "unparseable url"
+    if p.scheme not in ("http", "https"):
+        return False, "only http/https is allowed"
+    host = p.hostname or ""
+    if not host:
+        return False, "no host"
+    if host == "localhost" or host.endswith(".local"):
+        return False, "local address blocked"
+    # Block private/loopback targets, resolving hostnames first (SSRF guard).
+    candidates = [host]
+    try:
+        candidates += [sa[0] for *_, sa in socket.getaddrinfo(host, None)]
+    except Exception:
+        pass
+    for cand in candidates:
+        try:
+            ip = ipaddress.ip_address(cand)
+        except ValueError:
+            continue
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved \
+                or ip.is_multicast or ip.is_unspecified:
+            return False, "private/loopback address blocked"
+    return True, ""
+
+
+def _html_to_text(html: str) -> str:
+    html = re.sub(r"(?is)<(script|style|head|nav|footer|noscript)[^>]*>.*?</\1>", " ", html)
+    html = re.sub(r"(?s)<[^>]+>", " ", html)
+    for ent, ch in (("&nbsp;", " "), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
+                    ("&quot;", '"'), ("&#39;", "'"), ("&apos;", "'")):
+        html = html.replace(ent, ch)
+    html = re.sub(r"[ \t\r\f]+", " ", html)
+    html = re.sub(r"\n\s*\n+", "\n", html)
+    return html.strip()
+
+
+def _web_fetch(args):
+    url = str(args.get("url", "")).strip()
+    ok, why = _safe_url(url)
+    if not ok:
+        return f"(blocked: {why})"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            ctype = (r.headers.get("Content-Type") or "").lower()
+            raw = r.read(_WEB_MAX_BYTES)
+        text = raw.decode("utf-8", errors="ignore")
+        if "html" in ctype or text.lstrip()[:1] == "<":
+            text = _html_to_text(text)
+        return text[:_WEB_MAX_CHARS] or "(no readable text)"
+    except Exception as e:
+        return f"(error: {e})"
+
+
+def _parse_ddg(html: str):
+    out = []
+    for m in re.finditer(
+            r'<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+            html, re.S):
+        href, title = m.group(1), re.sub(r"(?s)<[^>]+>", "", m.group(2)).strip()
+        rel = re.search(r"uddg=([^&]+)", href)
+        if rel:
+            href = urllib.parse.unquote(rel.group(1))
+        elif href.startswith("//"):
+            href = "https:" + href
+        if title and href:
+            out.append((title, href))
+    return out
+
+
+def _web_search(args):
+    q = str(args.get("query", "")).strip()
+    if not q:
+        return "(no query)"
+    url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(q)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            html = r.read(_WEB_MAX_BYTES).decode("utf-8", errors="ignore")
+    except Exception as e:
+        return f"(search unavailable: {e})"
+    results = _parse_ddg(html)
+    if not results:
+        return "(no results — the search page may have changed)"
+    return "\n".join(f"{i}. {t} — {u}" for i, (t, u) in enumerate(results[:6], 1))
+
+
+def build_default_tools(memory=None, allow_web: bool = True) -> ToolRegistry:
     reg = ToolRegistry()
     reg.add(Tool("now", "Get the current date and time.",
                  lambda a: time.strftime("%Y-%m-%d %H:%M"), unattended=True))
@@ -120,6 +228,11 @@ def build_default_tools(memory=None) -> ToolRegistry:
                  _write_file, params={"path": "str", "content": "str"}, unattended=False))
     reg.add(Tool("run_shell", "Run a shell command (needs confirmation).",
                  _run_shell, params={"command": "str"}, unattended=False))
+    if allow_web:
+        reg.add(Tool("web_search", "Search the web and get the top result links.",
+                     _web_search, params={"query": "str"}, unattended=True))
+        reg.add(Tool("web_fetch", "Fetch a web page (http/https) and read its text.",
+                     _web_fetch, params={"url": "str"}, unattended=True))
     if memory is not None:
         reg.add(Tool("recall", "Search your memory for what you know.",
                      lambda a: _recall(memory, a), params={"query": "str"}, unattended=True))

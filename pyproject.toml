@@ -20,6 +20,7 @@ mem0 = ["mem0ai", "chromadb"]            # optional hybrid semantic backend
 dspy = ["dspy-ai"]                       # GEPA prompt/routing optimization
 serve = ["fastapi", "uvicorn", "mcp"]    # HTTP API + MCP bridge interfaces
 schedule = ["apscheduler"]               # cron-accurate consolidation scheduler
+browser = ["playwright>=1.40"]           # real JS-rendered pages for the `browse` tool
 dev = ["pytest", "ruff", "mypy"]
 
 [project.scripts]

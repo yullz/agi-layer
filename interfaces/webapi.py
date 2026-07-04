@@ -26,6 +26,12 @@ class WebApp:
     def __init__(self, orchestrator):
         self.orch = orchestrator
         self._sessions: dict = {}
+        # First-boot onboarding, mirrored from the terminal so the web app gives
+        # the same introductory interview. `_onb` holds the in-progress flow per
+        # session (question index + answers); `_onb_seen` marks sessions we've
+        # already auto-offered it to, so we don't re-prompt every message.
+        self._onb: dict = {}
+        self._onb_seen: set = set()
         cb = getattr(orchestrator, "context_builder", None)
         self.name = getattr(cb, "assistant_name", "Myro") or "Myro"
 
@@ -46,6 +52,19 @@ class WebApp:
         if not text:
             return {"reply": "", "steps": [], "model": None, "scope": scope}
         sess = self._session(sid, scope)
+
+        # Onboarding first — same first-boot interview as the terminal. If a flow
+        # is in progress this message is an answer; a brand-new user is offered it
+        # on their first message; and anyone can ask for it in plain language.
+        ob = getattr(self.orch, "onboarding", None)
+        if ob is not None:
+            if sid in self._onb:
+                return self._onb_answer(sess, sid, text, ob)
+            if self._wants_onboarding(text):
+                return self._onb_start(sess, sid, ob, rerun=ob.is_done())
+            if not ob.is_done() and sid not in self._onb_seen:
+                return self._onb_start(sess, sid, ob, rerun=False)
+
         confirm = (lambda *_a: True) if allow_actions else None
         try:
             reply = self.orch.handle_turn(text, sess, confirm=confirm)
@@ -65,6 +84,93 @@ class WebApp:
                 mn = getattr(m, "model", None)
                 return None if not mn else ("echo · offline" if mn == "echo" else mn)
         return None
+
+    # --- onboarding (parity with the terminal's first-boot interview) --------
+    _ONB_TRIGGERS = (
+        "onboard", "get to know me", "introduction question",
+        "introductory question", "intro question", "interview me",
+        "ask me the intro", "ask me your questions", "ask me those questions",
+        "redo the introduction", "redo introduction", "run the introduction",
+    )
+
+    def _wants_onboarding(self, text: str) -> bool:
+        t = (text or "").lower()
+        return any(k in t for k in self._ONB_TRIGGERS)
+
+    def start_onboarding(self, sid: str = "default") -> dict:
+        """Begin (or restart) the introductory interview for this session — the
+        button/endpoint the UI can call so it's discoverable, not just typed."""
+        ob = getattr(self.orch, "onboarding", None)
+        sess = self._session(sid)
+        if ob is None:
+            return {"reply": "Onboarding isn't available right now.",
+                    "steps": [], "model": None, "scope": sess.active_scope}
+        return self._onb_start(sess, sid, ob, rerun=ob.is_done())
+
+    def _onb_start(self, sess, sid, ob, rerun: bool) -> dict:
+        qs = ob.questions()
+        self._onb[sid] = {"i": 0, "answers": {}}
+        self._onb_seen.add(sid)
+        n = len(qs)
+        if rerun:
+            intro = (f"Sure — let's (re)do introductions. {n} quick questions; "
+                     "type 'skip' to pass one or 'stop' to finish early.")
+        else:
+            intro = (f"Hi — I'm {self.name}. Before we dive in, can I ask you {n} "
+                     "quick questions so I actually know you from the start? "
+                     "Type 'skip' to pass any, or 'stop' to finish early.")
+        return {"reply": f"{intro}\n\n[1/{n}] {qs[0]['q']}", "steps": [],
+                "model": None, "scope": sess.active_scope, "onboarding": True}
+
+    def _onb_answer(self, sess, sid, text, ob) -> dict:
+        state = self._onb.get(sid) or {"i": 0, "answers": {}}
+        qs = ob.questions()
+        i = min(int(state.get("i", 0)), len(qs) - 1)
+        q = qs[i]
+        if ob.is_stop(text):
+            return self._onb_finish(sess, sid, ob)
+        if not ob.is_skip(text):
+            ans = text.strip()
+            state.setdefault("answers", {})[q["key"]] = ans
+            ob.record(self.orch.memory, q, ans, scope=None)
+            if q["key"] == "name":
+                try:
+                    self.orch.context_builder.user_name = ans
+                except Exception:
+                    pass
+        state["i"] = i + 1
+        self._onb[sid] = state
+        if state["i"] >= len(qs):
+            return self._onb_finish(sess, sid, ob)
+        nxt = qs[state["i"]]
+        return {"reply": f"[{state['i'] + 1}/{len(qs)}] {nxt['q']}", "steps": [],
+                "model": None, "scope": sess.active_scope, "onboarding": True}
+
+    def _onb_finish(self, sess, sid, ob) -> dict:
+        from core.profile import derive, parse_timezone
+        state = self._onb.pop(sid, {"answers": {}})
+        answers = state.get("answers", {})
+        profile = derive(answers)
+        if "name" in answers:
+            profile["name"] = answers["name"]
+        ob.complete(profile)
+        tz = parse_timezone(profile.get("timezone")) if profile.get("timezone") else None
+        if tz is not None:
+            try:
+                self.orch.routines.set_tz(tz)
+            except Exception:
+                pass
+        who = profile.get("name") or ob.name()
+        hi = f", {who}" if who else ""
+        extra = ""
+        if tz is not None and profile.get("work_start") and profile.get("work_end"):
+            extra = (f" I've noted your timezone and workday "
+                     f"({profile['work_start']}–{profile['work_end']}), so anything "
+                     "I schedule lands at the right local time.")
+        reply = (f"Thanks{hi} — that gives me a great start, and I'll remember all "
+                 f"of it.{extra} What would you like to do first?")
+        return {"reply": reply, "steps": [], "model": None,
+                "scope": sess.active_scope, "onboarding": True}
 
     # --- status -------------------------------------------------------------
     def status(self, sid: str = "default") -> dict:

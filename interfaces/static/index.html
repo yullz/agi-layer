@@ -276,6 +276,8 @@
           <div class="row mb"><input class="field" id="pTz" placeholder="Timezone (e.g. Europe/Berlin)">
             <input class="field" id="pHours" placeholder="Working hours (e.g. 9am-6pm)"></div>
           <button class="btn" id="pSaveBtn">Save</button>
+          <button class="sbtn" id="onbBtn" style="margin-left:8px">Get to know me</button>
+          <div class="hint" style="margin-top:8px">Myro will ask a few quick questions in the chat so he really knows you.</div>
         </div>
         <div class="card">
           <h3>Status</h3>
@@ -457,6 +459,12 @@ async function loadProfile(){
     <div class="kv"><span class="k">Timezone</span><span>${esc(p.timezone)} · ${esc(p.local_time)}</span></div>
     <div class="kv"><span class="k">Working hours</span><span>${p.work_start?esc(p.work_start+' – '+p.work_end):'not set'}</span></div>`;
 }
+if($('#onbBtn'))$('#onbBtn').onclick=async()=>{
+  const r=await api('onboarding/start',{sid:SID});
+  showView('chat');
+  if(r&&r.reply)addMsg('myro',md(r.reply));
+  input.focus();
+};
 $('#pSaveBtn').onclick=async()=>{
   await api('profile',{name:$('#pName').value.trim(),timezone:$('#pTz').value.trim(),hours:$('#pHours').value.trim()});
   toast('Saved.');loadProfile();refreshStatus();

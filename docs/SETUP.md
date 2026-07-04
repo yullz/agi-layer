@@ -68,7 +68,7 @@ touches your memories.
 Want the deeper developer check too?
 
 ```bash
-python tests/smoke.py        # should print "All 186 checks PASS"
+python tests/smoke.py        # should print "All 191 checks PASS"
 ```
 
 If both look good, your install is healthy.

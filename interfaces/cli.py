@@ -184,15 +184,27 @@ def _handle_command(line, orch, session) -> bool:
         print(f"Saved routine “{name}”. Run it anytime with  :run {name}.")
         return True
     if line == ":routines":
+        from core.routines import describe_schedule
         routines = getattr(orch, "routines", None)
         items = routines.list() if routines else {}
         if items:
             print("Saved routines:")
             for name, it in items.items():
                 where = f"  [{it['scope']}]" if it.get("scope") else ""
-                print(f"  • {name}: {it['task']}{where}")
+                sched = describe_schedule(it)
+                tag = f"  ⏰ {sched}" if sched else ""
+                last = f"\n      last: {_short(it['last_result'])}" if it.get("last_result") else ""
+                print(f"  • {name}: {it['task']}{where}{tag}{last}")
         else:
             print("No routines yet — create one with  :automate <name> = <task>.")
+        return True
+    if line.startswith(":schedule "):
+        routines = getattr(orch, "routines", None)
+        if routines is None:
+            print("Routines aren't available right now.")
+            return True
+        ok, msg = _apply_schedule(routines, line.split(" ", 1)[1].strip())
+        print(msg)
         return True
     if line.startswith(":run "):
         routines = getattr(orch, "routines", None)
@@ -216,8 +228,9 @@ _HELP = (
     "  :do <task>            let me do a task using my tools\n"
     "  :tools                what tools I can use\n"
     "  :automate <n> = <t>   save task <t> as a routine named <n>\n"
-    "  :routines             list saved routines\n"
-    "  :run <name>           run a saved routine (unattended)\n"
+    "  :schedule <n> ...     schedule a routine: every <N>m | at <HH:MM> | off\n"
+    "  :routines             list saved routines (+ schedules, last result)\n"
+    "  :run <name>           run a saved routine now (unattended)\n"
     "  :memory [topic]       what I remember (optionally about a topic)\n"
     "  :remember <fact>      tell me something to remember\n"
     "  :forget <text>        forget matching memories\n"
@@ -234,6 +247,38 @@ _HELP = (
     "  exit / quit           leave\n"
     "Anything else is a message to me."
 )
+
+
+def _apply_schedule(routines, rest: str):
+    """Parse ':schedule <name> every 30m' | '<name> at 08:00' | '<name> off'."""
+    parts = rest.split()
+    if len(parts) < 2:
+        return False, "Use:  :schedule <name> every <N>m  |  at <HH:MM>  |  off"
+    name, verb, arg = parts[0], parts[1].lower(), (parts[2] if len(parts) > 2 else "")
+    if name not in routines.list():
+        return False, f"I don't have a routine called “{name}”."
+    if verb in ("off", "none", "never"):
+        routines.unschedule(name)
+        return True, f"Cleared the schedule for “{name}”."
+    if verb == "every":
+        mins = _minutes(arg or verb)
+        if not mins:
+            return False, "Use:  :schedule <name> every <N>m  (e.g. every 30m)"
+        routines.schedule(name, every_minutes=mins)
+        return True, f"“{name}” will run every {mins}m."
+    if verb == "at":
+        if ":" not in arg:
+            return False, "Use:  :schedule <name> at <HH:MM>  (e.g. at 08:00)"
+        routines.schedule(name, at=arg)
+        return True, f"“{name}” will run daily at {arg}."
+    return False, "Use:  :schedule <name> every <N>m  |  at <HH:MM>  |  off"
+
+
+def _minutes(token: str):
+    try:
+        return int((token or "").lower().rstrip("m").strip())
+    except Exception:
+        return None
 
 
 def _cli_confirm(tool, args) -> bool:

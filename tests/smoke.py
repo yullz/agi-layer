@@ -531,6 +531,77 @@ def main() -> int:
     check("starters are unscheduled by default (no background work)",
           all(not describe_schedule(it) for it in strt.list().values()))
 
+    # 22) connectors — git / calendar / email (Phase 14, real reads)
+    print("\n22) connectors: git / calendar / email")
+    from core import connectors as conn
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    gl = conn.git_log(repo_root, 3)
+    check("git connector reads recent commits",
+          not gl.startswith("(") and len(gl.splitlines()) >= 1)
+    check("git connector reports status", "##" in conn.git_status(repo_root))
+
+    ics = os.path.join(tmp, "cal.ics")
+    soon = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(time.time() + 3600))
+    old = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(time.time() - 2 * 86400))
+    with open(ics, "w", encoding="utf-8") as f:
+        f.write("BEGIN:VCALENDAR\n"
+                f"BEGIN:VEVENT\nSUMMARY:Dentist\nDTSTART:{soon}\nEND:VEVENT\n"
+                f"BEGIN:VEVENT\nSUMMARY:OldMeeting\nDTSTART:{old}\nEND:VEVENT\n"
+                "END:VCALENDAR\n")
+    cal_out = conn.calendar_upcoming(ics, days=7)
+    check("calendar connector lists upcoming, excludes past",
+          "Dentist" in cal_out and "OldMeeting" not in cal_out)
+
+    mbx = os.path.join(tmp, "mail.mbox")
+    with open(mbx, "w", encoding="utf-8") as f:
+        f.write("From alice@example.com Mon Jan  1 00:00:00 2024\n"
+                "From: alice@example.com\nSubject: Hello\n"
+                "Date: Mon, 01 Jan 2024 00:00:00 +0000\n\nHi there\n\n"
+                "From bob@example.com Tue Jan  2 00:00:00 2024\n"
+                "From: bob@example.com\nSubject: Invoice\n"
+                "Date: Tue, 02 Jan 2024 00:00:00 +0000\n\nPlease pay\n\n")
+    em = conn.email_recent(mbx, 5)
+    check("email connector reads a local mailbox", "Hello" in em and "Invoice" in em)
+
+    stt = conn.connector_status({"git_repo": repo_root, "calendar_file": ics, "mailbox_file": mbx})
+    check("connector status reports configured connectors",
+          stt["git"].startswith("ok") and stt["calendar"].startswith("ok")
+          and stt["email"].startswith("ok"))
+
+    ctools = _bdt(None, allow_web=False, connectors={"git_repo": repo_root})
+    check("connector tools registered",
+          all(t in ctools.names() for t in
+              ("git_log", "git_status", "calendar_upcoming", "email_recent")))
+    cagent = Agent(_ScriptRouter(['{"tool": "git_log", "args": {"n": 2}}',
+                                  '{"final": "done"}']), ctools)
+    cres = cagent.run("show recent commits")
+    check("agent can call a connector tool",
+          any(s["tool"] == "git_log" and not str(s["result"]).startswith("(error")
+              for s in cres["steps"]))
+
+    # 23) interactive browsing — action DSL + gating (Phase 14)
+    print("\n23) interactive browsing")
+    from core.tools import _browse_do, _parse_actions
+    acts = _parse_actions("goto https://x.test\nfill #user = alice\n"
+                          "click text=Login\nwait 500\nread .result\n# a comment")
+    check("action DSL parses verbs/targets/values",
+          [a["verb"] for a in acts] == ["goto", "fill", "click", "wait", "read"]
+          and acts[1]["target"] == "#user" and acts[1]["value"] == "alice")
+    check("interactive browse keeps the SSRF guard",
+          "blocked" in _browse_do({"url": "http://127.0.0.1/", "steps": "read"}))
+    check("interactive browse degrades without Playwright",
+          "Playwright" in _browse_do({"url": "http://example.invalid/", "steps": "read"}))
+    # acting on a page is GATED -> denied in an unattended run (fail-closed)
+    web_tools = _bdt(None, allow_web=True)
+    check("browse_do is a gated tool", not web_tools.get("browse_do").unattended)
+    gagent = Agent(_ScriptRouter(
+        ['{"tool": "browse_do", "args": {"url": "https://x.test", "steps": "click text=Buy"}}',
+         '{"final": "stopped"}']), web_tools, audit=a_audit)
+    gres = gagent.run("buy something", confirm=None)
+    check("interactive browse denied without confirmation",
+          any(s["tool"] == "browse_do" and "denied" in str(s["result"])
+              for s in gres["steps"]))
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

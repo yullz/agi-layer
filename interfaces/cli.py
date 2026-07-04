@@ -173,6 +173,18 @@ def _handle_command(line, orch, session) -> bool:
             gate = "" if s["unattended"] else "  (asks first)"
             print(f"  • {s['name']}({', '.join(s['args'])}) — {s['description']}{gate}")
         return True
+    if line == ":connectors":
+        from core.connectors import connector_status
+        conf = getattr(orch, "connectors", None)
+        if conf is None:
+            print("Connectors are disabled (allow_connectors = False).")
+            return True
+        print("Connectors (git / calendar / email):")
+        for name, state in connector_status(conf).items():
+            mark = "✓" if state.startswith("ok") else "·"
+            print(f"  {mark} {name}: {state}")
+        print("Set calendar_file / mailbox_file / git_repo in config to wire them up.")
+        return True
     if line == ":starters":
         from core.starter_routines import STARTERS, install_starters
         routines = getattr(orch, "routines", None)
@@ -242,6 +254,7 @@ _HELP = (
     "Commands:\n"
     "  :do <task>            let me do a task using my tools\n"
     "  :tools                what tools I can use\n"
+    "  :connectors           status of git / calendar / email connectors\n"
     "  :starters             install ready-made routines (briefing, digest…)\n"
     "  :automate <n> = <t>   save task <t> as a routine named <n>\n"
     "  :schedule <n> ...     schedule a routine: every <N>m | at <HH:MM> | off\n"

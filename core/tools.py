@@ -251,7 +251,88 @@ def _browse(args):
         return fb if not fb.startswith("(error") else f"(error: {e})"
 
 
-def build_default_tools(memory=None, allow_web: bool = True) -> ToolRegistry:
+# --- interactive browsing ---------------------------------------------------
+# A tiny action DSL so the agent can *act* on a page, not just read it. Because
+# acting can log in, submit forms, or make purchases, `browse_do` is GATED
+# (unattended=False): it needs confirmation and is denied in automations. Reading
+# is unattended; acting is not.
+_ACTION_VERBS = {"goto", "click", "fill", "type", "select", "press", "wait", "read"}
+
+
+def _parse_actions(text: str) -> list:
+    """One action per line: `verb target [= value]`. Blank lines and lines
+    starting with # are ignored; unknown verbs are skipped."""
+    actions = []
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        head, _, tail = line.partition(" ")
+        verb = head.lower()
+        if verb not in _ACTION_VERBS:
+            continue
+        rest = tail.strip()
+        if verb in ("fill", "type", "select") and "=" in rest:
+            target, value = (p.strip() for p in rest.split("=", 1))
+        else:
+            target, value = rest, ""
+        actions.append({"verb": verb, "target": target, "value": value})
+    return actions
+
+
+def _do_action(page, act, reads):
+    v, t, val = act["verb"], act["target"], act["value"]
+    if v == "goto":
+        page.goto(t, timeout=20000, wait_until="domcontentloaded")
+    elif v == "click":
+        page.click(t, timeout=8000)
+    elif v in ("fill", "type"):
+        page.fill(t, val, timeout=8000)
+    elif v == "select":
+        page.select_option(t, val, timeout=8000)
+    elif v == "press":
+        page.keyboard.press(t or "Enter")
+    elif v == "wait":
+        if t.isdigit():
+            page.wait_for_timeout(int(t))
+        elif t:
+            page.wait_for_selector(t, timeout=8000)
+    elif v == "read":
+        reads.append(page.inner_text(t) if t else page.inner_text("body")[:_WEB_MAX_CHARS])
+
+
+def _browse_do(args):
+    url = str(args.get("url", "")).strip()
+    ok, why = _safe_url(url)
+    if not ok:
+        return f"(blocked: {why})"
+    actions = _parse_actions(str(args.get("steps", "")))
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception:
+        return ("(interactive browsing needs Playwright — "
+                "pip install playwright && playwright install chromium)")
+    reads = []
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            try:
+                page = browser.new_page(user_agent=_UA)
+                page.goto(url, timeout=20000, wait_until="domcontentloaded")
+                for act in actions:
+                    _do_action(page, act, reads)
+                body = page.inner_text("body")
+            finally:
+                browser.close()
+        if reads:
+            return "\n".join(reads)[:_WEB_MAX_CHARS] or "(no output)"
+        return re.sub(r"\n\s*\n+", "\n", body or "").strip()[:_WEB_MAX_CHARS] or "(no output)"
+    except Exception as e:
+        return f"(error: {e})"
+
+
+def build_default_tools(memory=None, allow_web: bool = True,
+                        connectors: dict | None = None) -> ToolRegistry:
     reg = ToolRegistry()
     reg.add(Tool("now", "Get the current date and time.",
                  lambda a: time.strftime("%Y-%m-%d %H:%M"), unattended=True))
@@ -272,6 +353,26 @@ def build_default_tools(memory=None, allow_web: bool = True) -> ToolRegistry:
                      _web_fetch, params={"url": "str"}, unattended=True))
         reg.add(Tool("browse", "Open a page in a real browser (renders JavaScript) "
                      "and read its text.", _browse, params={"url": "str"}, unattended=True))
+        reg.add(Tool("browse_do", "Interact with a page in a real browser — click, "
+                     "fill, type, wait, read (one action per line). Needs confirmation.",
+                     _browse_do, params={"url": "str", "steps": "str"}, unattended=False))
+    if connectors is not None:
+        from core import connectors as _C
+        gr = connectors.get("git_repo") or "."
+        cal = connectors.get("calendar_file") or ""
+        mbx = connectors.get("mailbox_file") or ""
+        reg.add(Tool("git_log", "Show recent git commits in a repo.",
+                     lambda a: _C.git_log(a.get("path") or gr, int(a.get("n") or 10)),
+                     params={"path": "str", "n": "int"}, unattended=True))
+        reg.add(Tool("git_status", "Show the git working-tree status of a repo.",
+                     lambda a: _C.git_status(a.get("path") or gr),
+                     params={"path": "str"}, unattended=True))
+        reg.add(Tool("calendar_upcoming", "List upcoming calendar events from an .ics file.",
+                     lambda a: _C.calendar_upcoming(a.get("path") or cal, int(a.get("days") or 7)),
+                     params={"path": "str", "days": "int"}, unattended=True))
+        reg.add(Tool("email_recent", "List recent emails from a local mailbox (mbox).",
+                     lambda a: _C.email_recent(a.get("path") or mbx, int(a.get("n") or 10)),
+                     params={"path": "str", "n": "int"}, unattended=True))
     if memory is not None:
         reg.add(Tool("recall", "Search your memory for what you know.",
                      lambda a: _recall(memory, a), params={"query": "str"}, unattended=True))

@@ -86,8 +86,15 @@ class Settings:
     # the defaults the connector tools use (each also accepts a path argument).
     allow_connectors: bool = True
     git_repo: str | None = None        # default repo for git_log/git_status (None -> ".")
-    calendar_file: str | None = None   # path to an .ics for calendar_upcoming
+    calendar_file: str | None = None   # an .ics path OR a published .ics URL
     mailbox_file: str | None = None    # path to an mbox for email_recent
+    # Networked connectors (read-only). GitHub works on public repos with no
+    # token; a token unlocks private repos. IMAP creds stay on your machine.
+    github_repo: str | None = None     # owner/name for github_recent
+    github_token: str | None = None
+    imap_host: str | None = None
+    imap_user: str | None = None
+    imap_password: str | None = None
 
     # How often (seconds) the background tick checks for due scheduled routines.
     routine_tick_seconds: float = 60.0

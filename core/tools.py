@@ -332,7 +332,8 @@ def _browse_do(args):
 
 
 def build_default_tools(memory=None, allow_web: bool = True,
-                        connectors: dict | None = None) -> ToolRegistry:
+                        connectors: dict | None = None,
+                        browser_pilot=None) -> ToolRegistry:
     reg = ToolRegistry()
     reg.add(Tool("now", "Get the current date and time.",
                  lambda a: time.strftime("%Y-%m-%d %H:%M"), unattended=True))
@@ -356,23 +357,43 @@ def build_default_tools(memory=None, allow_web: bool = True,
         reg.add(Tool("browse_do", "Interact with a page in a real browser — click, "
                      "fill, type, wait, read (one action per line). Needs confirmation.",
                      _browse_do, params={"url": "str", "steps": "str"}, unattended=False))
+        if browser_pilot is not None:
+            reg.add(Tool("browse_agent", "Autonomously browse toward a goal — observe "
+                         "the page, decide, click/fill, repeat. Needs confirmation.",
+                         lambda a: browser_pilot.run(str(a.get("url", "")),
+                                                     str(a.get("goal", ""))).get("answer", ""),
+                         params={"url": "str", "goal": "str"}, unattended=False))
     if connectors is not None:
         from core import connectors as _C
         gr = connectors.get("git_repo") or "."
         cal = connectors.get("calendar_file") or ""
         mbx = connectors.get("mailbox_file") or ""
+        gh_repo = connectors.get("github_repo") or ""
+        gh_token = connectors.get("github_token") or None
         reg.add(Tool("git_log", "Show recent git commits in a repo.",
                      lambda a: _C.git_log(a.get("path") or gr, int(a.get("n") or 10)),
                      params={"path": "str", "n": "int"}, unattended=True))
         reg.add(Tool("git_status", "Show the git working-tree status of a repo.",
                      lambda a: _C.git_status(a.get("path") or gr),
                      params={"path": "str"}, unattended=True))
-        reg.add(Tool("calendar_upcoming", "List upcoming calendar events from an .ics file.",
+        reg.add(Tool("calendar_upcoming", "List upcoming calendar events (.ics file or URL).",
                      lambda a: _C.calendar_upcoming(a.get("path") or cal, int(a.get("days") or 7)),
                      params={"path": "str", "days": "int"}, unattended=True))
         reg.add(Tool("email_recent", "List recent emails from a local mailbox (mbox).",
                      lambda a: _C.email_recent(a.get("path") or mbx, int(a.get("n") or 10)),
                      params={"path": "str", "n": "int"}, unattended=True))
+        reg.add(Tool("github_recent", "List recent commits on a GitHub repo (owner/name).",
+                     lambda a: _C.github_recent(a.get("repo") or gh_repo, gh_token,
+                                                int(a.get("n") or 10)),
+                     params={"repo": "str", "n": "int"}, unattended=True))
+        if connectors.get("imap_host") and connectors.get("imap_user") \
+                and connectors.get("imap_password"):
+            reg.add(Tool("email_imap", "List recent email headers over IMAP.",
+                         lambda a: _C.imap_recent(connectors["imap_host"],
+                                                  connectors["imap_user"],
+                                                  connectors["imap_password"],
+                                                  int(a.get("n") or 10)),
+                         params={"n": "int"}, unattended=True))
     if memory is not None:
         reg.add(Tool("recall", "Search your memory for what you know.",
                      lambda a: _recall(memory, a), params={"query": "str"}, unattended=True))

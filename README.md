@@ -19,8 +19,10 @@ python tests/smoke.py                   # 192 offline checks prove the whole spi
 web app, browsing, voice, backups) then **`Myro.bat`** to run. Mac/Linux:
 `./setup.sh` then `./myro.sh`. One command for the lot: `pip install -e ".[all]"`.
 
-Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
-**[docs/SETUP.md](./docs/SETUP.md)** to switch on real models.
+👉 **New here? Read [MYRO.md](./MYRO.md)** — a plain-English guide to everything
+Myro can do, with examples. For the full design see
+**[ARCHITECTURE.md](./ARCHITECTURE.md)**, and to switch on real models see
+**[docs/SETUP.md](./docs/SETUP.md)**.
 
 ## What it does
 

@@ -61,7 +61,12 @@ def run_repl(orchestrator, session) -> None:
                 continue
             if _handle_command(line, orchestrator, session):
                 continue
-            reply = orchestrator.handle_turn(line, session)
+            # Plain natural language: the orchestrator routes to the agent when a
+            # capable model is connected, so it can act (gated tools prompt via
+            # _cli_confirm) or just answer. Show any tool activity it performed.
+            reply = orchestrator.handle_turn(line, session, confirm=_cli_confirm)
+            for s in getattr(orchestrator, "last_steps", None) or []:
+                print(f"  · {s['tool']}({_fmt_args(s['args'])}) → {_short(s['result'])}")
             via = _last_model(session)
             print(f"layer> {reply}" + (f"   [via {via}]" if via else ""))
         except Exception as e:
@@ -252,7 +257,7 @@ def _handle_command(line, orch, session) -> bool:
 
 _HELP = (
     "Commands:\n"
-    "  :do <task>            let me do a task using my tools\n"
+    "  :do <task>            force a task through my tools (also happens in chat)\n"
     "  :tools                what tools I can use\n"
     "  :connectors           status of git / calendar / email connectors\n"
     "  :starters             install ready-made routines (briefing, digest…)\n"
@@ -274,7 +279,8 @@ _HELP = (
     "  :optimize             improve my routing from your feedback\n"
     "  :status / :about      status / what this is\n"
     "  exit / quit           leave\n"
-    "Anything else is a message to me."
+    "Otherwise just talk to me — ask a question or ask me to do something, and\n"
+    "I'll answer or take the action (I'll ask before anything that writes or sends)."
 )
 
 

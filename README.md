@@ -32,11 +32,13 @@ Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
   Claude Agent SDK), local **Qwen** via Ollama, and a zero-dependency **echo**
   fallback so it always runs. Auto-selects the first reachable backend and
   degrades gracefully if one fails mid-turn.
-- **Does tasks, not just talk.** A governed, model-agnostic **agent loop**
-  (`:do <task>`) reasons in steps and calls **tools** (read files, calc, search
-  memory, **search / fetch / browse the web** — including JS-rendered pages and
-  **interactive** click/fill/login via headless Chromium, run a command) to
-  actually get things done — including a **perceive-act loop** (`browse_agent`)
+- **Does tasks, not just talk.** Just talk to it — plain natural language ("add
+  a calendar event for the dentist tomorrow at 3pm") routes through a governed,
+  model-agnostic **agent loop** that decides whether to act or answer, and calls
+  **tools** (read files, calc, search memory, **search / fetch / browse the web**
+  — including JS-rendered pages and **interactive** click/fill/login via headless
+  Chromium, run a command) to actually get things done (`:do <task>` forces the
+  tool path) — including a **perceive-act loop** (`browse_agent`)
   that observes a page (text + accessibility tree, and screenshots for vision
   models), decides, clicks, and repeats toward a goal. Write / exec / interactive
   tools are gated (confirm required) and every call is audited;

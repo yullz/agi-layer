@@ -831,6 +831,65 @@ def main() -> int:
            "children": [{"role": "button", "name": str(i)} for i in range(100)]}
     check("flatten_ax respects its node limit", len(_flatten_ax(big, limit=10)) == 10)
 
+    # 29) natural-language auto-routing to the agent (Phase 17)
+    print("\n29) natural-language auto-routing")
+
+    def _orch(router, tools, agent, tag):
+        m, _e, _s = build_memory(os.path.join(tmp, "nl_" + tag))
+        o = Orchestrator(memory=m, router=router, context_builder=ContextBuilder(),
+                         skills=Skills(), feedback=Feedback())
+        o.tools, o.agent = tools, agent
+        return o
+
+    # capable model: plain language -> the agent picks a tool, then answers in prose
+    cap_tools = _bdt(None, allow_web=False, connectors={"git_repo": repo_root})
+    cap_router = _ScriptRouter(['{"tool": "git_log", "args": {"n": 1}}',
+                               "Here's your latest commit."])
+    oc = _orch(cap_router, cap_tools, Agent(cap_router, cap_tools), "cap")
+    rc = oc.handle_turn("show me my latest commit", Session(), confirm=lambda *_: True)
+    check("plain language triggers a tool via the agent",
+          any(s["tool"] == "git_log" for s in oc.last_steps) and "commit" in rc.lower())
+
+    # a plain question stays conversational — no tool call
+    chat_router = _ScriptRouter(["Your dog is a border collie named Zephyr."])
+    och = _orch(chat_router, _bdt(None, allow_web=False),
+                Agent(chat_router, _bdt(None, allow_web=False)), "chat")
+    rq = och.handle_turn("what kind of dog do I have?", Session(), confirm=None)
+    check("a plain question answers conversationally (no tool)",
+          "border collie" in rq.lower() and och.last_steps == [])
+
+    # gated tool in a conversational turn is denied without confirmation
+    g_tools = _bdt(None, allow_web=False,
+                   connectors={"calendar_file": os.path.join(tmp, "nl.ics")})
+    g_router = _ScriptRouter(
+        ['{"tool": "calendar_add_event", "args": {"title": "X", "start": "2030-01-01 09:00"}}',
+         "I need your confirmation to add that."])
+    og = _orch(g_router, g_tools, Agent(g_router, g_tools), "gate")
+    og.handle_turn("put X on my calendar", Session(), confirm=None)
+    check("gated tool denied in a conversational turn without confirm",
+          any(s["tool"] == "calendar_add_event" and "denied" in str(s["result"])
+              for s in og.last_steps))
+
+    # offline echo model degrades to the plain generate path (no agent routing)
+    class _EchoRouter(_ScriptRouter):
+        class _E:
+            model_name, is_local = "echo", True
+
+            def generate(self, prompt, tools=None):
+                return "echo-reply"
+
+        def pick(self, q, c, scope=None):
+            return _EchoRouter._E()
+
+        def generate(self, model, prompt, tools=None):
+            return model, model.generate(prompt, tools=tools)
+
+    oe = _orch(_EchoRouter([]), _bdt(None, allow_web=False),
+               Agent(_EchoRouter([]), _bdt(None, allow_web=False)), "echo")
+    re_ = oe.handle_turn("hello", Session(), confirm=None)
+    check("offline echo uses the plain path (no agent routing)",
+          re_ == "echo-reply" and oe.last_steps == [])
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

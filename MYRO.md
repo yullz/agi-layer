@@ -172,6 +172,12 @@ Out of the box he uses the echo fallback (so he *always* works). Add Ollama or
 Claude to make him genuinely smart — see **[docs/SETUP.md](./docs/SETUP.md)**,
 Step 4.
 
+**You choose how he picks.** If both a local model and Claude are set up, Myro
+normally routes everyday chat to Claude (sharpest) and keeps anything *private*
+on the local model. Prefer to keep **everything** local — private and free? Flip
+**Settings → Brain → "Prefer my local model"** in the app (or set
+`AGI_PREFER_LOCAL=on`). Sensitive things stay local either way.
+
 ---
 
 ## ⌨️ Handy terminal commands

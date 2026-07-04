@@ -284,6 +284,15 @@
           <div id="profStatus"></div>
         </div>
         <div class="card">
+          <h3>Brain</h3>
+          <div class="hint">Which brain Myro thinks with. <b>Local</b> keeps every chat on your own machine (private &amp; free). <b>Auto</b> uses the best brain available (e.g. Claude) and still keeps anything private on the local model.</div>
+          <div class="toggles" style="margin-top:10px">
+            <span class="tg" id="brainToggle" title="Keep everyday chat on your local model">
+              <span class="sw"></span> Prefer my local model</span>
+          </div>
+          <div class="hint" id="brainNow" style="margin-top:8px"></div>
+        </div>
+        <div class="card">
           <h3>Backup</h3>
           <div class="hint">Snapshot everything you've built (memory, routines, settings). Stays on your machine — point the backup folder at OneDrive/Dropbox, or configure encryption + a private GitHub repo, in setup.</div>
           <button class="btn" id="backupBtn">Back up now</button>
@@ -458,7 +467,19 @@ async function loadProfile(){
     <div class="kv"><span class="k">Model</span><span>${esc(p.model)}</span></div>
     <div class="kv"><span class="k">Timezone</span><span>${esc(p.timezone)} · ${esc(p.local_time)}</span></div>
     <div class="kv"><span class="k">Working hours</span><span>${p.work_start?esc(p.work_start+' – '+p.work_end):'not set'}</span></div>`;
+  const st=await api('status?sid='+SID); showBrain((st&&st.brain)||{});
 }
+function showBrain(b){
+  if($('#brainToggle'))$('#brainToggle').classList.toggle('on',b.mode==='local');
+  if($('#brainNow'))$('#brainNow').textContent='Currently using: '+(b.model||'—')+(b.local?' (local · private)':' (cloud)');
+}
+if($('#brainToggle'))$('#brainToggle').onclick=async()=>{
+  const goLocal=!$('#brainToggle').classList.contains('on');
+  const r=await api('brain',{mode:goLocal?'local':'auto'});
+  showBrain(r);
+  toast(r.mode==='local'?'Using your local model — private & free.':'Auto-routing — I\'ll use the best brain available.');
+  refreshStatus();
+};
 if($('#onbBtn'))$('#onbBtn').onclick=async()=>{
   const r=await api('onboarding/start',{sid:SID});
   showView('chat');

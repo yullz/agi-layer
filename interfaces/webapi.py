@@ -177,7 +177,41 @@ class WebApp:
         sess = self._session(sid)
         return {"name": self.name, "model": self._model_status(),
                 "memory": self._memory_count(), "scope": sess.active_scope,
-                "models": list(self._registry_names())}
+                "models": list(self._registry_names()), "brain": self._brain()}
+
+    # --- brain preference (local-first vs. auto-route) ----------------------
+    def set_brain(self, mode: str) -> dict:
+        """'local' keeps everyday chat on the on-box model (private + free);
+        'auto' routes to the best available brain (e.g. Claude). Persists."""
+        from core import brain
+        prefer = str(mode).strip().lower() in ("local", "on", "1", "true", "private")
+        policy = getattr(self.orch, "policy", None)
+        reg = getattr(getattr(self.orch, "router", None), "registry", None)
+        if policy is None or reg is None:
+            return {"ok": False}
+        eff = brain.apply_preference(policy, reg, prefer)
+        data_dir = getattr(self.orch, "data_dir", None)
+        if data_dir is not None:
+            brain.save_pref(data_dir, eff)
+        return {"ok": True, **self._brain()}
+
+    def _brain(self) -> dict:
+        """{mode: local|auto, model: <what a general turn would use>, local: bool}."""
+        from core import brain
+        policy = getattr(self.orch, "policy", None)
+        router = getattr(self.orch, "router", None)
+        reg = getattr(router, "registry", None)
+        mode = "local" if (policy is not None and reg is not None
+                           and brain.is_local_preferred(policy, reg)) else "auto"
+        picked, local = None, False
+        if router is not None:
+            try:
+                m = router.pick("hello", None)
+                picked = getattr(m, "model_name", None) or getattr(m, "name", None)
+                local = bool(getattr(m, "is_local", False))
+            except Exception:
+                pass
+        return {"mode": mode, "model": picked, "local": local}
 
     def _registry_names(self):
         reg = getattr(getattr(self.orch, "router", None), "registry", None)

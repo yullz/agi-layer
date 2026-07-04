@@ -917,6 +917,33 @@ def main() -> int:
           ContextBuilder(assistant_name="Zara")
           .build(Session(), ContextBundle(), None)[0]["content"].startswith("You are Zara"))
 
+    # 31) timezone + working hours -> scheduling lines up with the user's day (Phase 19)
+    print("\n31) timezone + working hours")
+    from core import profile as prof
+    # offset parsing is exact and deterministic (epoch 0 = 1970-01-01T00:00Z)
+    check("UTC offset parses to the right wall-clock",
+          prof.now_hhmm(prof.parse_timezone("UTC+2"), 0) == "02:00"
+          and prof.now_hhmm(prof.parse_timezone("UTC-5"), 0) == "19:00")
+    check("a city maps to a timezone", prof.parse_timezone("Berlin") is not None)
+    check("short abbreviations don't false-match inside words",
+          prof.parse_timezone("Atlanta") is None)   # 'la' must not match Atlanta
+    check("working hours parse from free text",
+          prof.parse_working_hours("9am to 6pm") == ("09:00", "18:00")
+          and prof.parse_working_hours("9 to 5") == ("09:00", "17:00"))
+    check("derive builds a profile from onboarding answers",
+          prof.derive({"location": "Berlin", "hours": "9 to 5"})
+          == {"timezone": "Berlin", "work_start": "09:00", "work_end": "17:00"})
+
+    # a daily routine fires at the user's local time, in their timezone
+    tzp = prof.parse_timezone("UTC+2")
+    tbase = 1_700_000_000.0
+    r_tz = Routines(os.path.join(tmp, "tzsched.json"), Agent(_ScriptRouter([]), a_tools), tz=tzp)
+    r_tz.add("brief", "morning brief")
+    r_tz.schedule("brief", at=prof.now_hhmm(tzp, tbase))     # == the user's local HH:MM
+    check("daily routine fires at the user's local time",
+          any(f["name"] == "brief" for f in r_tz.run_due(now=tbase)))
+    check("timezone flows into the routine scheduler", r_tz.tz is tzp)
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

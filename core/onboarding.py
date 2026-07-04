@@ -72,7 +72,19 @@ class Onboarding:
         return bool(self._state.get("done"))
 
     def name(self) -> str | None:
-        return (self._state.get("profile") or {}).get("name")
+        return self._profile().get("name")
+
+    def timezone(self) -> str | None:
+        return self._profile().get("timezone")
+
+    def work_start(self) -> str | None:
+        return self._profile().get("work_start")
+
+    def work_end(self) -> str | None:
+        return self._profile().get("work_end")
+
+    def _profile(self) -> dict:
+        return self._state.get("profile") or {}
 
     @staticmethod
     def is_skip(answer: str) -> bool:

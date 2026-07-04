@@ -195,6 +195,8 @@ def _handle_command(line, orch, session) -> bool:
             gate = "" if s["unattended"] else "  (asks first)"
             print(f"  • {s['name']}({', '.join(s['args'])}) — {s['description']}{gate}")
         return True
+    if line == ":profile" or line.startswith(":profile "):
+        return _handle_profile(line, orch)
     if line == ":connectors":
         from core.connectors import connector_status
         conf = getattr(orch, "connectors", None)
@@ -252,7 +254,8 @@ def _handle_command(line, orch, session) -> bool:
         if routines is None:
             print("Routines aren't available right now.")
             return True
-        ok, msg = _apply_schedule(routines, line.split(" ", 1)[1].strip())
+        rest = _resolve_workday(line.split(" ", 1)[1].strip(), getattr(orch, "onboarding", None))
+        ok, msg = _apply_schedule(routines, rest)
         print(msg)
         return True
     if line.startswith(":run "):
@@ -279,7 +282,8 @@ _HELP = (
     "  :connectors           status of git / calendar / email connectors\n"
     "  :starters             install ready-made routines (briefing, digest…)\n"
     "  :automate <n> = <t>   save task <t> as a routine named <n>\n"
-    "  :schedule <n> ...     schedule a routine: every <N>m | at <HH:MM> | off\n"
+    "  :schedule <n> ...     schedule a routine: every <N>m | at <HH:MM|workstart> | off\n"
+    "  :profile              your name / timezone / working hours (tz used for scheduling)\n"
     "  :routines             list saved routines (+ schedules, last result)\n"
     "  :run <name>           run a saved routine now (unattended)\n"
     "  :memory [topic]       what I remember (optionally about a topic)\n"
@@ -300,6 +304,62 @@ _HELP = (
     "Otherwise just talk to me — ask a question or ask me to do something, and\n"
     "I'll answer or take the action (I'll ask before anything that writes or sends)."
 )
+
+
+def _handle_profile(line, orch) -> bool:
+    from core.profile import now_hhmm, parse_timezone, tz_label
+    ob = getattr(orch, "onboarding", None)
+    if ob is None:
+        print("No profile available yet.")
+        return True
+    parts = line.split()
+    if len(parts) >= 3 and parts[1].lower() == "tz":
+        tzs = " ".join(parts[2:])
+        tz = parse_timezone(tzs)
+        if tz is None:
+            print("I couldn't read that timezone — try an IANA name, a city, or 'UTC+2'.")
+            return True
+        ob.complete({"timezone": tzs})
+        try:
+            orch.routines.set_tz(tz)
+        except Exception:
+            pass
+        print(f"Timezone set to {tz_label(tz)} (now {now_hhmm(tz, time.time())}).")
+        return True
+    if len(parts) >= 3 and parts[1].lower() == "hours":
+        from core.profile import parse_working_hours
+        wh = parse_working_hours(" ".join(parts[2:]))
+        if not wh:
+            print("Use:  :profile hours 9am-6pm")
+            return True
+        ob.complete({"work_start": wh[0], "work_end": wh[1]})
+        print(f"Working hours set to {wh[0]}–{wh[1]}.")
+        return True
+    tz = parse_timezone(ob.timezone()) if ob.timezone() else None
+    print("Your profile:")
+    print(f"  name:          {ob.name() or '—'}")
+    print(f"  timezone:      {tz_label(tz)}  (your local time now: {now_hhmm(tz, time.time())})")
+    ws, we = ob.work_start(), ob.work_end()
+    print(f"  working hours: {ws + '–' + we if ws and we else 'not set'}")
+    print("Set with:  :profile tz <zone>   ·   :profile hours 9am-6pm")
+    return True
+
+
+def _resolve_workday(rest: str, onboarding):
+    """Turn ':schedule <name> at workstart|workend' into a concrete HH:MM using
+    the user's working hours; leaves the token as-is if hours aren't set."""
+    parts = rest.split()
+    if len(parts) >= 3 and parts[1].lower() == "at" and onboarding is not None:
+        tok = parts[2].lower()
+        if tok in ("workstart", "start", "workday"):
+            t = onboarding.work_start()
+            if t:
+                parts[2] = t
+        elif tok in ("workend", "end"):
+            t = onboarding.work_end()
+            if t:
+                parts[2] = t
+    return " ".join(parts)
 
 
 def _apply_schedule(routines, rest: str):
@@ -374,7 +434,8 @@ def _run_onboarding(orch, session, onboarding, name, rerun: bool = False) -> Non
               "questions")
         print("  so I actually know you from the start?")
     print("  (Press Enter to skip any · type 'stop' to finish early.)\n")
-    profile = {}
+    from core.profile import derive, parse_timezone, tz_label
+    answers = {}
     for i, q in enumerate(qs, 1):
         try:
             ans = input(f"  [{i}/{len(qs)}] {q['q']}\n  you> ").strip()
@@ -385,17 +446,32 @@ def _run_onboarding(orch, session, onboarding, name, rerun: bool = False) -> Non
             break
         if onboarding.is_skip(ans):
             continue
+        answers[q["key"]] = ans
         onboarding.record(orch.memory, q, ans, scope=None)
         if q["key"] == "name":
-            profile["name"] = ans
             try:
                 orch.context_builder.user_name = ans
             except Exception:
                 pass
+    # Derive timezone + working hours from the location/hours answers, persist
+    # them, and apply the timezone to scheduling right away.
+    profile = derive(answers)
+    if "name" in answers:
+        profile["name"] = answers["name"]
     onboarding.complete(profile)
+    tz = parse_timezone(profile.get("timezone")) if profile.get("timezone") else None
+    if tz is not None:
+        try:
+            orch.routines.set_tz(tz)
+        except Exception:
+            pass
     who = profile.get("name") or onboarding.name()
     hi = f", {who}" if who else ""
     print(f"\n  Thanks{hi} — that gives me a great start, and I'll remember it.")
+    if tz is not None:
+        wh = (f", workday {profile['work_start']}–{profile['work_end']}"
+              if profile.get("work_start") else "")
+        print(f"  I'll schedule around your timezone ({tz_label(tz)}){wh}.")
     print("  Tell me more anytime, or type  :learn.")
 
 

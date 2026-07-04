@@ -1,0 +1,32 @@
+# Model registry. The router picks from these per query.
+# adapter: frontier (hard reasoning, external) | local (private, cheap, always-on)
+models:
+  - name: claude-opus
+    adapter: frontier
+    provider: anthropic          # routed via LiteLLM
+    context_window: 200000
+    capabilities: [tools, long_context, vision]
+    privacy: external
+    cost: high
+
+  - name: claude-sonnet
+    adapter: frontier
+    provider: anthropic
+    context_window: 200000
+    capabilities: [tools, long_context, vision]
+    privacy: external
+    cost: medium
+
+  - name: qwen-local
+    adapter: local
+    endpoint: http://localhost:11434
+    context_window: 32000
+    capabilities: [tools]
+    privacy: local
+    cost: free
+
+defaults:
+  hard_reasoning: claude-opus
+  general: claude-sonnet
+  private: qwen-local          # anything scoped sensitive never leaves the box
+  fallback: qwen-local

@@ -1,0 +1,31 @@
+# Suggested dependencies — pin versions when you install.
+# The design is deliberately swappable; nothing here is load-bearing
+# except LiteLLM (routing) and whatever vector store you settle on.
+
+# Multi-model routing (keeps every provider behind one call)
+litellm
+
+# Config
+pyyaml
+
+# Local models (Ollama is the easiest start; vLLM for throughput)
+ollama
+
+# Vector store — pick ONE:
+chromadb
+# sqlite-vec        # zero-infra, can live in your episodic .db file
+# lancedb           # columnar, good when memory gets large
+
+# Embeddings + cross-encoder reranker
+sentence-transformers
+
+# Prompt/routing optimization loop
+dspy-ai
+
+# Background scheduler for consolidation
+apscheduler
+
+# Interfaces (optional)
+fastapi
+uvicorn
+mcp

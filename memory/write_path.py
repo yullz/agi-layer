@@ -89,8 +89,27 @@ class WritePipeline:
     def _update_graph(self, turn: Turn) -> None:
         if not hasattr(self.graph, "get_or_create_entity"):
             return
+        text = f"{turn.user_input} {turn.assistant_reply}"
+
+        # Typed relations via the LLM extractor when available (subject-predicate
+        # -object) — real multi-hop structure, not just co-occurrence.
+        ex = self.extractor
+        if (ex is not None and hasattr(ex, "extract_relations")
+                and getattr(ex, "available", lambda: False)()):
+            try:
+                triples = ex.extract_relations(text)
+            except Exception:
+                triples = None
+            if triples:
+                for s, p, o in triples:
+                    sid = self.graph.get_or_create_entity(s, scope=turn.scope)
+                    oid = self.graph.get_or_create_entity(o, scope=turn.scope)
+                    self.graph.relate(sid, oid, p, scope=turn.scope)
+                return
+
+        # Heuristic co-occurrence fallback.
         from memory.extract import extract_entities
-        names = extract_entities(f"{turn.user_input} {turn.assistant_reply}")
+        names = extract_entities(text)
         if len(names) < 2:
             return
         ids = [self.graph.get_or_create_entity(n, scope=turn.scope) for n in names]

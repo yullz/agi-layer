@@ -50,21 +50,22 @@ def build():
     embedder = Embedder("your-embedding-model")
     reranker = Reranker()  # lazy cross-encoder; identity passthrough if absent
     registry = ModelRegistry(cfg.models_config, FrontierModel, LocalModel)
+    # LLM extraction / contradiction / relation detection runs on the private
+    # (local) model for privacy; degrades to heuristics when unreachable.
+    extractor = LLMExtractor(registry.get(registry.default_name("private")))
 
     # --- Stores ---
     episodic = EpisodicStore(cfg.episodic_db)
     if cfg.semantic_backend == "mem0":
         semantic = SemanticStore(cfg.vector_dir, embedder)      # hybrid engine
     else:
-        # LLM extraction/contradiction runs on the private (local) model for
-        # privacy; falls back to heuristics when it's unreachable.
-        extractor = LLMExtractor(registry.get(registry.default_name("private")))
         semantic = NativeSemanticStore(cfg.vector_dir, embedder, extractor=extractor)
     graph = GraphStore(cfg.graph_dir)
     procedural = ProceduralStore(cfg.episodic_db)
 
     # --- Memory pipelines ---
-    write_pipeline = WritePipeline(episodic=episodic, semantic=semantic, graph=graph)
+    write_pipeline = WritePipeline(episodic=episodic, semantic=semantic, graph=graph,
+                                   extractor=extractor)
     consolidator = Consolidator(
         episodic=episodic, semantic=semantic, graph=graph,
         summarizer=registry.get(registry.default_name("private")),
@@ -88,7 +89,9 @@ def build():
         memory=memory,
         router=Router(registry, policy, sensitive_scopes=cfg.sensitive_scopes),
         context_builder=ContextBuilder(),
-        skills=Skills(),
+        skills=Skills(model=registry.get(registry.default_name("private")),
+                      registry_dir=cfg.data_dir / "skills",
+                      guardrails=guardrails, audit=audit),
         feedback=Feedback(path=cfg.data_dir / "feedback.jsonl"),
         retrieval_budget_tokens=cfg.retrieval_budget_tokens,
         optimizer=Optimizer(),

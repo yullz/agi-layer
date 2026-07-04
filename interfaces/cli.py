@@ -4,8 +4,8 @@ from __future__ import annotations
 
 
 def run_repl(orchestrator, session) -> None:
-    print("agi-layer — 'exit' quits | ':scope <name>' switch project | "
-          "':good'/':bad' rate last | ':optimize' improve")
+    print("agi-layer — 'exit' quits | ':scope <name>' switch | ':good'/':bad' rate "
+          "| ':optimize' improve | ':seed' load known facts")
     while True:
         try:
             line = input("you> ").strip()
@@ -26,6 +26,10 @@ def run_repl(orchestrator, session) -> None:
             continue
         if line == ":optimize":
             print(f"[optimize] {orchestrator.optimize()}")
+            continue
+        if line == ":seed":
+            from memory.seed import seed_memory
+            print(f"[seed] {seed_memory(orchestrator.memory)}")
             continue
         try:
             reply = orchestrator.handle_turn(line, session)

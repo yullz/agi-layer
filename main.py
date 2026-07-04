@@ -13,6 +13,7 @@ Set a frontier key or start a local Ollama model to enable real generation.
 from __future__ import annotations
 
 import os
+import sys
 
 from config.settings import Settings
 from governance.audit import Audit
@@ -155,7 +156,20 @@ def build():
     return cfg, orchestrator
 
 
+def _force_utf8() -> None:
+    """Windows terminals default to a legacy code page (e.g. cp1252) that can't
+    encode Myro's emoji/symbols, so a plain print() would crash with
+    UnicodeEncodeError. Make stdout/stderr UTF-8 with a safe fallback so output
+    never raises — on any platform, including when piped to a file."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
 def main():
+    _force_utf8()
     cfg, orchestrator = build()
     # Background consolidation ("sleep") on the configured cron — APScheduler if
     # installed, else a stdlib timer fallback.

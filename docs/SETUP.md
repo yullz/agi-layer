@@ -11,32 +11,39 @@ can add it whenever you like.
 
 ## Step 1 — Install Python (one time)
 
-Myro needs **Python 3.11 or newer**. Check if you already have it:
+Myro needs **Python 3.11, 3.12, or 3.13**. Check what you have:
 
 ```bash
-python --version        # Windows might use:  py --version
+python --version        # Windows: if that fails, try   py --version
 ```
 
-If it says 3.11 or higher, you're set. If not, install it from
-**https://python.org/downloads** (tick *"Add Python to PATH"* on Windows).
+**Recommended: Python 3.12.** (Brand-new versions like 3.14 work for basic Myro,
+but some optional add-ons — the app, voice — don't have installers for them yet.)
+If you need it, get it from **https://python.org/downloads** — on Windows, tick
+*"Add Python to PATH"* during install.
 
 ## Step 2 — Get Myro running
 
-In a terminal (Command Prompt / PowerShell on Windows, Terminal on Mac/Linux),
-go to the `agi-layer` folder, then:
+Open a terminal in the Myro folder and follow **your** operating system. The
+commands are different on Windows vs Mac/Linux — use the right set!
 
+**🪟 Windows (PowerShell):**
+```powershell
+py -3.12 -m venv .venv                  # create Myro's workspace (or: python -m venv .venv)
+.\.venv\Scripts\Activate.ps1            # turn it on  ← the Windows command
+pip install -e .                        # install Myro
+python main.py                          # start him
+```
+> If `Activate.ps1` is blocked ("running scripts is disabled"), run this once,
+> then the activate line again:
+> `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+
+**🍎 Mac / 🐧 Linux (Terminal):**
 ```bash
-# 1) create a private workspace for Myro's dependencies
-python -m venv .venv
-
-# 2) turn it on
-source .venv/bin/activate        # Windows: .venv\Scripts\Activate.ps1
-
-# 3) install Myro
+python3 -m venv .venv
+source .venv/bin/activate                # turn it on  ← the Mac/Linux command
 pip install -e .
-
-# 4) start him
-python main.py
+python3 main.py
 ```
 
 That's it. The first time, **Myro introduces himself and asks you ~13 quick
@@ -51,7 +58,7 @@ Type `:help` any time to see what he can do, and `exit` to leave.
 ## Step 3 — Check everything's healthy (optional)
 
 ```bash
-python tests/smoke.py        # should print "All 169 checks PASS"
+python tests/smoke.py        # should print "All 186 checks PASS"
 ```
 
 If that passes, your install is good.
@@ -225,6 +232,19 @@ just type normally     ask a question, or ask him to do something
 
 ## Troubleshooting
 
+- **`source : The term 'source' is not recognized` (Windows)** → that's the
+  Mac/Linux command. On Windows use `.\.venv\Scripts\Activate.ps1` instead. (If
+  you already ran `pip install -e .` and it said "Successfully installed", the
+  install worked — just start Myro with `python main.py`.)
+- **`Activate.ps1` blocked ("running scripts is disabled")** → run once:
+  `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, then activate again.
+- **Weird `UnicodeEncodeError` / garbled symbols on Windows** → set UTF-8 first:
+  `$env:PYTHONUTF8 = "1"` then `python main.py`. (Recent versions handle this
+  automatically; `Myro.bat` also sets it for you.)
+- **An extra won't install on Python 3.14** → use **Python 3.12** (some add-ons
+  don't ship installers for 3.14 yet). Basic Myro still runs on 3.14.
+- **Setting env vars on Windows** → PowerShell uses `$env:NAME = "value"` (not
+  `export NAME=value`, which is Mac/Linux).
 - **"command not found: python"** → try `py` (Windows) or `python3` (Mac/Linux).
 - **Replies are short/robotic** → you're on the built-in echo brain; do **Step 4**.
 - **Voice says "no engine"** → install `pyttsx3` (`pip install pyttsx3`) or your OS

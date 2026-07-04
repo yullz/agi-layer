@@ -112,14 +112,14 @@ class Consolidator:
     # --- watermark ----------------------------------------------------------
     def _last_ts(self) -> float:
         try:
-            with open(self._state_path) as f:
+            with open(self._state_path, encoding="utf-8") as f:
                 return float(json.load(f).get("last_ts", 0.0))
         except Exception:
             return 0.0
 
     def _save_ts(self, ts: float) -> None:
         try:
-            with open(self._state_path, "w") as f:
+            with open(self._state_path, "w", encoding="utf-8") as f:
                 json.dump({"last_ts": ts}, f)
         except Exception:
             pass

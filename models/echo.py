@@ -10,6 +10,8 @@ from __future__ import annotations
 
 
 class EchoModel:
+    is_local = True  # on-box, safe as a sensitive-scope last resort
+
     def __init__(self, name: str = "echo", **opts):
         self.model_name = name or "echo"
         self.opts = opts

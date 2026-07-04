@@ -31,7 +31,7 @@ class Orchestrator:
         )
 
         # ROUTE + ASSEMBLE — pick a model, build the prompt.
-        model = self.router.pick(user_input, ctx)
+        model = self.router.pick(user_input, ctx, scope=session.active_scope)
         prompt = self.context_builder.build(session, ctx, model)
 
         # GENERATE — the tool loop lives inside the model adapter.

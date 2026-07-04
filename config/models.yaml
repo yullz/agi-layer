@@ -1,39 +1,56 @@
 # Model registry. The router picks from these per query.
-# adapter: frontier (hard reasoning, external) | local (private, cheap, always-on)
+# adapter: agent_sdk (Claude via your Pro/Max plan) | frontier (Claude via API
+#          key) | local (Ollama, private/always-on) | echo (offline fallback)
 models:
+  # Claude via your Pro/Max SUBSCRIPTION (Agent SDK auth — run `claude login`).
+  # No per-token API billing: draws from your plan. `model:` is optional — omit
+  # to use your plan's default, or pin a specific Claude model id.
   - name: claude-opus
-    adapter: frontier
-    provider: anthropic          # routed via LiteLLM
+    adapter: agent_sdk
+    # model: <claude-model-id>
     context_window: 200000
     capabilities: [tools, long_context, vision]
     privacy: external
-    cost: high
+    cost: subscription
 
   - name: claude-sonnet
-    adapter: frontier
-    provider: anthropic
+    adapter: agent_sdk
+    # model: <claude-model-id>
     context_window: 200000
     capabilities: [tools, long_context, vision]
     privacy: external
-    cost: medium
+    cost: subscription
 
+  # Local model (Ollama) — private scopes + always-on fallback.
+  #   ollama pull qwen3:14b        (fits a 16GB GPU at Q4)
   - name: qwen-local
     adapter: local
+    model: qwen3:14b               # the Ollama model tag
     endpoint: http://localhost:11434
-    context_window: 32000
+    context_window: 40000
     capabilities: [tools]
     privacy: local
     cost: free
 
+  # Offline, zero-dependency fallback — runs with no key/Ollama.
   - name: echo
-    adapter: echo                # offline, zero-dependency fallback — runs with no key/Ollama
+    adapter: echo
     context_window: 8000
     capabilities: []
     privacy: local
     cost: free
 
+# Pay-per-token API alternative (uncomment if you exceed your plan limits):
+#  - name: claude-api
+#    adapter: frontier
+#    provider: anthropic          # needs ANTHROPIC_API_KEY
+#    context_window: 200000
+#    capabilities: [tools, long_context, vision]
+#    privacy: external
+#    cost: medium
+
 defaults:
   hard_reasoning: claude-opus
   general: claude-sonnet
-  private: qwen-local          # anything scoped sensitive never leaves the box
+  private: qwen-local            # anything scoped sensitive never leaves the box
   fallback: qwen-local

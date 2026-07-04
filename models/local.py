@@ -13,6 +13,8 @@ import urllib.request
 
 
 class LocalModel:
+    is_local = True
+
     def __init__(self, model_name: str, endpoint: str = "http://localhost:11434", **opts):
         self.model_name = model_name
         self.endpoint = endpoint.rstrip("/")

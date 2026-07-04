@@ -25,6 +25,8 @@ _PROVIDER_KEY_ENV = {
 
 
 class FrontierModel:
+    is_local = False
+
     def __init__(self, model_name: str, provider: str | None = None, **opts):
         self.model_name = model_name
         self.provider = provider

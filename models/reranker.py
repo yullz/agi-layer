@@ -1,20 +1,48 @@
-"""Cross-encoder reranker — reorders fused candidates by true relevance."""
+"""Cross-encoder reranker — reorders fused candidates by true relevance.
+
+Loads a local cross-encoder via sentence-transformers on first use and sets
+cand.rerank_score so the signal survives retrieval's final re-sort. Degrades
+gracefully: if sentence-transformers or the model isn't available it returns
+candidates unchanged (identity passthrough) — the pipeline runs with or without
+a reranker.
+
+Default is a small, fast MiniLM cross-encoder. For best quality while staying
+local-first, upgrade `model_name` to a Qwen3-Reranker checkpoint.
+"""
 from __future__ import annotations
 
 from memory.schema import RetrievalCandidate
 
 
 class Reranker:
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2", **opts):
         self.model_name = model_name
+        self.opts = opts
+        self._model = None
+        self._tried = False
+
+    def _load(self):
+        if self._tried:
+            return self._model
+        self._tried = True
+        try:
+            from sentence_transformers import CrossEncoder
+            self._model = CrossEncoder(self.model_name)
+        except Exception:
+            self._model = None  # dep/model absent -> identity passthrough
+        return self._model
 
     def rerank(self, query: str, candidates: list[RetrievalCandidate]) -> list[RetrievalCandidate]:
-        """Score each candidate against the query with a cross-encoder, set
-        cand.rerank_score (higher = more relevant) so the signal survives the
-        final re-sort, and return them reordered.
-
-        Phase 1: identity passthrough (no cross-encoder wired yet). Returning
-        candidates unchanged honours the graceful-degradation contract — the
-        pipeline runs with or without a real reranker.
-        """
+        if not candidates:
+            return candidates
+        model = self._load()
+        if model is None:
+            return candidates  # graceful identity passthrough
+        try:
+            scores = model.predict([(query, c.content) for c in candidates])
+            for c, s in zip(candidates, scores):
+                c.rerank_score = float(s)
+            candidates.sort(key=lambda c: c.rerank_score, reverse=True)
+        except Exception:
+            pass
         return candidates

@@ -110,7 +110,7 @@ def _default_mem0_config(vector_dir: str) -> dict | None:
     if os.environ.get("OPENAI_API_KEY"):
         return None  # let Mem0 use its OpenAI defaults
     return {
-        "llm": {"provider": "ollama", "config": {"model": "qwen2.5"}},
+        "llm": {"provider": "ollama", "config": {"model": "qwen3:14b"}},
         "embedder": {"provider": "ollama", "config": {"model": "nomic-embed-text"}},
         "vector_store": {"provider": "chroma", "config": {"path": f"{vector_dir}/mem0"}},
     }

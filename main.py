@@ -40,7 +40,7 @@ def build():
 
     # --- Models ---
     embedder = Embedder("your-embedding-model")
-    reranker = Reranker("your-cross-encoder")
+    reranker = Reranker()  # lazy cross-encoder; identity passthrough if absent
     registry = ModelRegistry(cfg.models_config, FrontierModel, LocalModel)
 
     # --- Stores ---
@@ -53,12 +53,13 @@ def build():
     write_pipeline = WritePipeline(episodic=episodic, semantic=semantic, graph=graph)
     consolidator = Consolidator(
         episodic=episodic, semantic=semantic, graph=graph,
+        summarizer=registry.get(registry.default_name("private")),
         half_life_days=cfg.recency_half_life_days,
     )
 
     memory = MemoryStore(
         episodic=episodic, semantic=semantic, graph=graph, procedural=procedural,
-        embedder=embedder, reranker=None,  # Phase 1: no cross-encoder wired yet
+        embedder=embedder, reranker=reranker,
         write_pipeline=write_pipeline, consolidator=consolidator,
         half_life_days=cfg.recency_half_life_days,
         budget_tokens=cfg.retrieval_budget_tokens,
@@ -68,7 +69,7 @@ def build():
     policy = Policy()
     orchestrator = Orchestrator(
         memory=memory,
-        router=Router(registry, policy),
+        router=Router(registry, policy, sensitive_scopes=cfg.sensitive_scopes),
         context_builder=ContextBuilder(),
         skills=Skills(),
         feedback=Feedback(),

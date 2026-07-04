@@ -61,6 +61,11 @@ class Settings:
     # Consolidation schedule (cron). Default: 3am daily.
     consolidation_cron: str = "0 3 * * *"
 
+    # Scopes whose turns must never leave the machine (router forces a local
+    # model). Scopes containing private/sensitive/health/finance/etc. are also
+    # treated as sensitive by convention.
+    sensitive_scopes: tuple = ()
+
     # Model registry, parsed from config/models.yaml (see _load_models_config).
     models_config: dict = field(default_factory=dict)
 

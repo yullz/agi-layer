@@ -1,18 +1,20 @@
 """Model registry — available backends and their capabilities/costs.
 
 Loads model definitions from config/models.yaml (passed in as a dict) and
-constructs one adapter per entry via injected factories. The router asks it for
-a model by name or by capability/cost. Construction never raises on a single
+constructs one adapter per entry via injected factories. Supports four adapter
+kinds: agent_sdk (Claude on your subscription), frontier (Claude via API key),
+local (Ollama), and echo (offline). Construction never raises on a single
 bad/unavailable backend — it skips it — so the registry can't become a boot
 wall, and an offline `echo` backend is always guaranteed to exist.
 """
 from __future__ import annotations
 
-_COST_RANK = {"free": 0, "low": 1, "medium": 2, "high": 3}
+_COST_RANK = {"free": 0, "subscription": 1, "low": 1, "medium": 2, "high": 3}
 
 
 class ModelRegistry:
-    def __init__(self, config: dict, frontier_factory, local_factory, echo_factory=None):
+    def __init__(self, config: dict, frontier_factory, local_factory,
+                 echo_factory=None, agent_sdk_factory=None):
         config = config or {}
         self._defaults: dict = dict(config.get("defaults", {}))
         self._meta: dict = {}      # name -> config entry
@@ -21,6 +23,12 @@ class ModelRegistry:
         if echo_factory is None:
             from models.echo import EchoModel
             echo_factory = EchoModel
+        if agent_sdk_factory is None:
+            try:
+                from models.agent_sdk import AgentSDKModel
+                agent_sdk_factory = AgentSDKModel
+            except Exception:
+                agent_sdk_factory = None
 
         for entry in config.get("models", []):
             name = entry.get("name")
@@ -31,14 +39,19 @@ class ModelRegistry:
                 if kind == "frontier":
                     adapter = frontier_factory(name, provider=entry.get("provider"))
                 elif kind == "local":
+                    # `model` (or the entry name) is the Ollama model tag.
                     adapter = local_factory(
-                        name, endpoint=entry.get("endpoint", "http://localhost:11434"))
+                        entry.get("model") or name,
+                        endpoint=entry.get("endpoint", "http://localhost:11434"))
+                elif kind == "agent_sdk":
+                    if agent_sdk_factory is None:
+                        continue
+                    adapter = agent_sdk_factory(name, model=entry.get("model"))
                 elif kind == "echo":
                     adapter = echo_factory(name)
                 else:
                     continue
             except Exception:
-                # A backend that can't even be constructed is simply unavailable.
                 continue
             self._meta[name] = entry
             self._adapters[name] = adapter

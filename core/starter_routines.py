@@ -57,6 +57,13 @@ STARTERS = [
         "suggest": "at workend",
         "about": "End-of-day recap — what you did + what's open, pushed to your phone.",
     },
+    {
+        "name": "backup",
+        "task": "Back up my memory and settings using the backup tool.",
+        "scope": None,
+        "suggest": "at 02:00",
+        "about": "Nightly backup — snapshot everything you've built (local, optionally encrypted/GitHub).",
+    },
 ]
 
 

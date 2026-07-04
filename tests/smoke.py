@@ -45,6 +45,21 @@ def check(name: str, cond: bool) -> None:
     print(f"  [{PASS if cond else FAIL}] {name}")
 
 
+def _enc_roundtrip(bk, src: str, workdir: str) -> bool:
+    """Encrypt src then decrypt it back and confirm the bytes match. If
+    `cryptography` isn't installed, encrypt returns None -> the optional feature
+    is simply absent, which counts as a pass."""
+    os.makedirs(workdir, exist_ok=True)
+    enc = bk.encrypt_file(src, "pw123")
+    if enc is None:
+        return True
+    out = os.path.join(workdir, "dec.tar.gz")
+    if not bk.decrypt_file(enc, "pw123", out):
+        return False
+    with open(src, "rb") as a, open(out, "rb") as b:
+        return a.read() == b.read()
+
+
 def build_memory(tmp: str):
     os.makedirs(tmp, exist_ok=True)
     episodic = EpisodicStore(os.path.join(tmp, "episodic.db"))
@@ -1144,6 +1159,47 @@ def main() -> int:
         html = f.read()
     check("web app page exists and wires the chat API",
           "/api/" in html and "chat" in html and "Myro" in html and "speechSynthesis" in html)
+
+    # 36) backups — snapshot everything you built (Phase 25)
+    print("\n36) backups")
+    import tarfile as _tf
+
+    from core import backup as bk
+    bdata = os.path.join(tmp, "bk_data")
+    os.makedirs(os.path.join(bdata, "vectors"))
+    with open(os.path.join(bdata, "episodic.db"), "w") as f:
+        f.write("episodes")
+    with open(os.path.join(bdata, "vectors", "semantic.db"), "w") as f:
+        f.write("vectors")
+    bdest = os.path.join(tmp, "bk_out")
+    snap = bk.snapshot(bdata, bdest)
+    with _tf.open(snap) as t:
+        arc = t.getnames()
+    check("backup snapshots the data into an archive",
+          snap.endswith(".tar.gz") and any("episodic.db" in n for n in arc)
+          and any("semantic.db" in n for n in arc))
+    rdir = os.path.join(tmp, "bk_restore")
+    check("backup restores round-trip",
+          bk.restore(snap, rdir) and os.path.exists(os.path.join(rdir, "episodic.db")))
+    for i in range(3):
+        bk.snapshot(bdata, bdest, now=1000 + i * 3600)
+    check("rotate keeps only N snapshots",
+          bk.rotate(bdest, keep=2) >= 1
+          and len([f for f in os.listdir(bdest) if f.startswith("myro-backup-")]) == 2)
+    res = bk.run_backup({"data_dir": bdata, "backup_dir": os.path.join(tmp, "bk_run"),
+                         "backup_keep": 5})
+    check("run_backup makes a local snapshot (no push by default)",
+          res["ok"] and res["snapshot"].startswith("myro-backup-") and res["pushed"] is None)
+    check("git backup command is a proper git push",
+          bk._git_backup_cmds("/repo", "s.tar.gz")[-1] == ["git", "-C", "/repo", "push"])
+    check("encrypt round-trips when crypto is available (else skipped)",
+          _enc_roundtrip(bk, snap, os.path.join(tmp, "bk_enc")))
+    btools = _bdt(None, allow_web=False, backup_config={"data_dir": bdata})
+    check("backup tool registered + unattended (schedulable)",
+          btools.get("backup") is not None and btools.get("backup").unattended)
+    from core.starter_routines import STARTERS as _ST
+    check("nightly backup starter is available",
+          any(s["name"] == "backup" for s in _ST))
 
     print()
     if all(_results):

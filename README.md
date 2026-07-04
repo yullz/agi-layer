@@ -12,7 +12,7 @@ embeddings light it up further — nothing is required to start.
 ```bash
 python main.py                          # terminal: first boot asks a few questions, then chat
 AGI_INTERFACE=api python main.py        # or open the browser app (double-click Myro.bat on Windows)
-python tests/smoke.py                   # 178 offline checks prove the whole spine
+python tests/smoke.py                   # 186 offline checks prove the whole spine
 ```
 
 Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
@@ -66,6 +66,10 @@ Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design, and
 - **Has a real app.** A clean, premium **browser chat app** (`AGI_INTERFACE=api`,
   or double-click `Myro.bat`) — served from your own machine, works offline —
   with chat, voice, memory, routines, connectors, and settings tabs.
+- **Backs itself up.** `:backup` (or a nightly routine) snapshots all of `data/`
+  locally — point it at a synced drive, encrypt it, or push to a private GitHub
+  repo. Your data (`data/`) is gitignored and separate from the code, so updates
+  never touch your memories.
 - **Is a bridge.** Exposes `ask` / `retrieve_memory` / `remember` over **MCP** so
   your other agents share this brain (`AGI_INTERFACE=mcp`), plus a localhost HTTP
   API.

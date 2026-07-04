@@ -131,15 +131,19 @@ def build():
     # Voice I/O: one shared Speaker (replies + the `speak` tool) and a Listener
     # (speech-to-text). Both degrade to no-ops when no engine/mic is present.
     speaker = Speaker(enabled=cfg.voice_enabled)
+    backup_config = {"data_dir": str(cfg.data_dir), "backup_dir": cfg.backup_dir,
+                     "backup_keep": cfg.backup_keep, "backup_passphrase": cfg.backup_passphrase,
+                     "backup_git_dir": cfg.backup_git_dir}
     tools = build_default_tools(memory, allow_web=cfg.allow_web, connectors=connectors,
                                 browser_pilot=pilot, notify_config=notify_config,
-                                speaker=speaker)
+                                speaker=speaker, backup_config=backup_config)
     orchestrator.tools = tools
     orchestrator.connectors = connectors
     orchestrator.notify_config = notify_config
     orchestrator.voice_enabled = cfg.voice_enabled
     orchestrator.speaker = speaker
     orchestrator.listener = Listener()
+    orchestrator.backup_config = backup_config
     orchestrator.agent = Agent(router, tools, audit=audit)
     # Timezone from config, else derived from the onboarding location answer, so
     # daily routines fire at the user's local wall-clock.

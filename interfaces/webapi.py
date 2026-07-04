@@ -200,3 +200,11 @@ class WebApp:
         from core.starter_routines import install_starters
         r = getattr(self.orch, "routines", None)
         return {"added": install_starters(r) if r else []}
+
+    # --- backup -------------------------------------------------------------
+    def backup(self) -> dict:
+        from core import backup as bk
+        cfg = getattr(self.orch, "backup_config", None)
+        if cfg is None:
+            return {"ok": False, "message": "backups unavailable"}
+        return {"ok": True, "message": bk.summary(bk.run_backup(cfg))}

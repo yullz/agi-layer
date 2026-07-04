@@ -226,6 +226,14 @@ def _handle_command(line, orch, session) -> bool:
             gate = "" if s["unattended"] else "  (asks first)"
             print(f"  • {s['name']}({', '.join(s['args'])}) — {s['description']}{gate}")
         return True
+    if line == ":backup":
+        cfg = getattr(orch, "backup_config", None)
+        if cfg is None:
+            print("Backups aren't available right now.")
+            return True
+        from core import backup as bk
+        print(bk.summary(bk.run_backup(cfg)))
+        return True
     if line == ":profile" or line.startswith(":profile "):
         return _handle_profile(line, orch)
     if line == ":connectors":
@@ -315,6 +323,7 @@ _HELP = (
     "  :automate <n> = <t>   save task <t> as a routine named <n>\n"
     "  :schedule <n> ...     schedule a routine: every <N>m | at <HH:MM|workstart> | off\n"
     "  :profile              your name / timezone / working hours (tz used for scheduling)\n"
+    "  :backup               snapshot everything you've built (local, safe)\n"
     "  :routines             list saved routines (+ schedules, last result)\n"
     "  :run <name>           run a saved routine now (unattended)\n"
     "  :memory [topic]       what I remember (optionally about a topic)\n"

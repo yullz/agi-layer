@@ -57,11 +57,16 @@ class BrowserPilot:
             steps: list[dict] = []
             for _ in range(self.max_steps):
                 obs = session.observe()
-                messages = [{"role": "system", "content": _SYSTEM},
-                            {"role": "user", "content": f"GOAL: {goal}\n\n{obs}"}]
-                for s in steps[-3:]:
-                    messages.append({"role": "assistant", "content": json.dumps(s["action"])})
-                    messages.append({"role": "user", "content": f"(did that: {s['result']})"})
+                # Richer perception: attach a screenshot for vision-capable models
+                # (the model advertises supports_vision). Text-only otherwise.
+                vision = bool(getattr(model, "supports_vision", False))
+                shot = None
+                if vision and hasattr(session, "screenshot"):
+                    try:
+                        shot = session.screenshot()
+                    except Exception:
+                        shot = None
+                messages = _build_messages(goal, obs, steps, shot, vision)
                 model, reply = self.router.generate(model, messages)
                 action = _parse_action(reply)
                 if action is None or "done" in action:
@@ -98,6 +103,60 @@ def _first_object(text):
     return m.group(0) if m else None
 
 
+# --- perception (pure, so the Playwright adapter stays thin + testable) ------
+_AX_SKIP = {"generic", "none", "presentation", "InlineTextBox", "LineBreak", "text"}
+
+
+def _flatten_ax(node, limit: int = 40) -> list:
+    """Flatten a Playwright accessibility snapshot to compact `role "name"`
+    lines — the semantic skeleton a model reasons over far better than raw DOM."""
+    out: list[str] = []
+
+    def walk(n):
+        if not isinstance(n, dict) or len(out) >= limit:
+            return
+        role, name = n.get("role"), (n.get("name") or "").strip()
+        if role and role not in _AX_SKIP:
+            out.append(f'{role} "{name}"' if name else role)
+        for c in (n.get("children") or []):
+            walk(c)
+
+    walk(node or {})
+    return out[:limit]
+
+
+def _format_observation(url: str, text: str, elements, ax_lines) -> str:
+    parts = [f"URL: {url}", "TEXT:", (text or "")[:2500]]
+    if ax_lines:
+        parts += ["ACCESSIBILITY (role \"name\"):", "\n".join(f"- {a}" for a in ax_lines)]
+    if elements:
+        parts += ["ELEMENTS:", "\n".join(f"- {e}" for e in elements)]
+    return "\n".join(parts)
+
+
+def _build_messages(goal: str, obs: str, history, screenshot_b64=None,
+                    supports_vision: bool = False) -> list:
+    """Assemble the per-step messages. For a vision model with a screenshot, the
+    user turn is multimodal (text + image); otherwise it's plain text — so a
+    non-vision backend never receives an image it can't handle."""
+    if supports_vision and screenshot_b64:
+        # OpenAI/LiteLLM-compatible image part (a data: URI). A provider adapter
+        # can translate this to the Anthropic-native shape if needed.
+        user_content = [
+            {"type": "text", "text": f"GOAL: {goal}\n\n{obs}"},
+            {"type": "image_url",
+             "image_url": {"url": f"data:image/png;base64,{screenshot_b64}"}},
+        ]
+    else:
+        user_content = f"GOAL: {goal}\n\n{obs}"
+    messages = [{"role": "system", "content": _SYSTEM},
+                {"role": "user", "content": user_content}]
+    for s in (history or [])[-3:]:
+        messages.append({"role": "assistant", "content": json.dumps(s["action"])})
+        messages.append({"role": "user", "content": f"(did that: {s['result']})"})
+    return messages
+
+
 class _PlaywrightSession:
     """Thin Playwright adapter: observe() snapshots the page, act() performs one
     DSL action. Kept minimal on purpose — the tested logic is in the loop."""
@@ -119,8 +178,20 @@ class _PlaywrightSession:
                 "((e.innerText||e.value||e.placeholder||e.name||'').slice(0,60))).trim())")
         except Exception:
             els = []
-        return (f"URL: {self.page.url}\nTEXT:\n{text}\n"
-                f"ELEMENTS:\n" + "\n".join(f"- {e}" for e in els))
+        try:
+            ax = self.page.accessibility.snapshot()
+        except Exception:
+            ax = None
+        return _format_observation(self.page.url, text, els, _flatten_ax(ax))
+
+    def screenshot(self):
+        """Base64 PNG of the current viewport, for vision models. None on error."""
+        try:
+            import base64
+            png = self.page.screenshot(type="png", full_page=False)
+            return base64.b64encode(png).decode("ascii")
+        except Exception:
+            return None
 
     def act(self, action: dict) -> str:
         from core.tools import _do_action  # reuse the browse_do action executor

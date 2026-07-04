@@ -90,11 +90,18 @@ class Settings:
     mailbox_file: str | None = None    # path to an mbox for email_recent
     # Networked connectors (read-only). GitHub works on public repos with no
     # token; a token unlocks private repos. IMAP creds stay on your machine.
-    github_repo: str | None = None     # owner/name for github_recent
-    github_token: str | None = None
+    github_repo: str | None = None     # owner/name for github_* tools
+    github_token: str | None = None    # unlocks private repos + issue creation
     imap_host: str | None = None
     imap_user: str | None = None
     imap_password: str | None = None
+    # SMTP send (gated tool). Credentials stay on your machine. Port 587 uses
+    # STARTTLS; 465 uses TLS-on-connect (SMTP_SSL) automatically.
+    smtp_host: str | None = None
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_port: int = 587
 
     # How often (seconds) the background tick checks for due scheduled routines.
     routine_tick_seconds: float = 60.0

@@ -15,6 +15,7 @@ import re
 import socket
 import subprocess
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -152,6 +153,27 @@ def _safe_url(url: str):
     return True, ""
 
 
+class _GuardedRedirect(urllib.request.HTTPRedirectHandler):
+    """Re-run the SSRF guard on every redirect target — otherwise a public URL
+    could 3xx-redirect to a private/loopback host and slip past the entry check."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        ok, why = _safe_url(newurl)
+        if not ok:
+            raise urllib.error.HTTPError(newurl, code, f"blocked redirect: {why}",
+                                         headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_OPENER = urllib.request.build_opener(_GuardedRedirect())
+
+
+def _safe_urlopen(req, timeout: float = 15.0):
+    """urlopen that validates redirect hops. Use for every outbound GET/POST so
+    the SSRF guard can't be bypassed by a redirect."""
+    return _OPENER.open(req, timeout=timeout)
+
+
 def _html_to_text(html: str) -> str:
     html = re.sub(r"(?is)<(script|style|head|nav|footer|noscript)[^>]*>.*?</\1>", " ", html)
     html = re.sub(r"(?s)<[^>]+>", " ", html)
@@ -170,7 +192,7 @@ def _web_fetch(args):
         return f"(blocked: {why})"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": _UA})
-        with urllib.request.urlopen(req, timeout=15) as r:
+        with _safe_urlopen(req, timeout=15) as r:
             ctype = (r.headers.get("Content-Type") or "").lower()
             raw = r.read(_WEB_MAX_BYTES)
         text = raw.decode("utf-8", errors="ignore")
@@ -204,7 +226,7 @@ def _web_search(args):
     url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(q)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": _UA})
-        with urllib.request.urlopen(req, timeout=15) as r:
+        with _safe_urlopen(req, timeout=15) as r:
             html = r.read(_WEB_MAX_BYTES).decode("utf-8", errors="ignore")
     except Exception as e:
         return f"(search unavailable: {e})"
@@ -283,6 +305,12 @@ def _parse_actions(text: str) -> list:
 def _do_action(page, act, reads):
     v, t, val = act["verb"], act["target"], act["value"]
     if v == "goto":
+        # In-session navigation is model/page-driven, so re-apply the SSRF guard:
+        # a public entry page (or a prompt-injection string) must not be able to
+        # steer a goto to localhost / a private host / file:// mid-session.
+        ok, why = _safe_url(t)
+        if not ok:
+            raise ValueError(f"blocked navigation: {why}")
         page.goto(t, timeout=20000, wait_until="domcontentloaded")
     elif v == "click":
         page.click(t, timeout=8000)
@@ -386,6 +414,27 @@ def build_default_tools(memory=None, allow_web: bool = True,
                      lambda a: _C.github_recent(a.get("repo") or gh_repo, gh_token,
                                                 int(a.get("n") or 10)),
                      params={"repo": "str", "n": "int"}, unattended=True))
+        reg.add(Tool("github_issues", "List open issues on a GitHub repo (owner/name).",
+                     lambda a: _C.github_issues(a.get("repo") or gh_repo, gh_token,
+                                                int(a.get("n") or 10)),
+                     params={"repo": "str", "n": "int"}, unattended=True))
+        reg.add(Tool("github_prs", "List open pull requests on a GitHub repo (owner/name).",
+                     lambda a: _C.github_prs(a.get("repo") or gh_repo, gh_token,
+                                             int(a.get("n") or 10)),
+                     params={"repo": "str", "n": "int"}, unattended=True))
+        # --- write actions (gated: confirmation required, denied in automation) ---
+        reg.add(Tool("calendar_add_event", "Add an event to a local .ics calendar. "
+                     "Needs confirmation.",
+                     lambda a: _C.calendar_add_event(a.get("path") or cal, a.get("title", ""),
+                                                     a.get("start", ""),
+                                                     int(a.get("duration_min") or 60)),
+                     params={"path": "str", "title": "str", "start": "str",
+                             "duration_min": "int"}, unattended=False))
+        reg.add(Tool("github_create_issue", "Open an issue on a GitHub repo. Needs confirmation.",
+                     lambda a: _C.github_create_issue(a.get("repo") or gh_repo,
+                                                      a.get("title", ""), a.get("body", ""),
+                                                      gh_token),
+                     params={"repo": "str", "title": "str", "body": "str"}, unattended=False))
         if connectors.get("imap_host") and connectors.get("imap_user") \
                 and connectors.get("imap_password"):
             reg.add(Tool("email_imap", "List recent email headers over IMAP.",
@@ -394,6 +443,15 @@ def build_default_tools(memory=None, allow_web: bool = True,
                                                   connectors["imap_password"],
                                                   int(a.get("n") or 10)),
                          params={"n": "int"}, unattended=True))
+        if connectors.get("smtp_host") and connectors.get("smtp_user") \
+                and connectors.get("smtp_password"):
+            reg.add(Tool("email_send", "Send an email via SMTP. Needs confirmation.",
+                         lambda a: _C.smtp_send(connectors["smtp_host"], connectors["smtp_user"],
+                                                connectors["smtp_password"], a.get("to", ""),
+                                                a.get("subject", ""), a.get("body", ""),
+                                                connectors.get("smtp_from"),
+                                                port=int(connectors.get("smtp_port") or 587)),
+                         params={"to": "str", "subject": "str", "body": "str"}, unattended=False))
     if memory is not None:
         reg.add(Tool("recall", "Search your memory for what you know.",
                      lambda a: _recall(memory, a), params={"query": "str"}, unattended=True))

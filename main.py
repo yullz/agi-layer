@@ -113,7 +113,10 @@ def build():
     connectors = ({"git_repo": cfg.git_repo, "calendar_file": cfg.calendar_file,
                    "mailbox_file": cfg.mailbox_file, "github_repo": cfg.github_repo,
                    "github_token": cfg.github_token, "imap_host": cfg.imap_host,
-                   "imap_user": cfg.imap_user, "imap_password": cfg.imap_password}
+                   "imap_user": cfg.imap_user, "imap_password": cfg.imap_password,
+                   "smtp_host": cfg.smtp_host, "smtp_user": cfg.smtp_user,
+                   "smtp_password": cfg.smtp_password, "smtp_from": cfg.smtp_from,
+                   "smtp_port": cfg.smtp_port}
                   if cfg.allow_connectors else None)
     pilot = BrowserPilot(router) if cfg.allow_web else None
     tools = build_default_tools(memory, allow_web=cfg.allow_web, connectors=connectors,

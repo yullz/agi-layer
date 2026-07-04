@@ -29,16 +29,21 @@ from memory.retrieval import recency_weight
 from memory.schema import ItemKind, MemoryItem, RetrievalCandidate, Source
 
 _DIM = 256
-_DUP_THRESHOLD = 0.95
+_DUP_THRESHOLD = 0.95   # >= this cosine => treat as the same item (dedup)
+_SIM_LOW = 0.5          # in [_SIM_LOW, _DUP_THRESHOLD) => ask the LLM to judge
 
 
 class NativeSemanticStore:
     available = True  # native store is always usable (hashing fallback offline)
 
-    def __init__(self, vector_dir, embedder=None, dim: int = _DIM):
+    def __init__(self, vector_dir, embedder=None, extractor=None, dim: int = _DIM):
         os.makedirs(str(vector_dir), exist_ok=True)
         self.db_path = os.path.join(str(vector_dir), "semantic.db")
         self.embedder = embedder
+        self.extractor = extractor
+        # Cache whether the LLM extractor is usable (a probe can be a network
+        # ping); re-check by rebuilding the store if the model comes online.
+        self._use_llm = bool(extractor and getattr(extractor, "available", lambda: False)())
         self.dim = dim
         self._lock = threading.Lock()
         self._db = sqlite3.connect(self.db_path, check_same_thread=False)
@@ -67,18 +72,37 @@ class NativeSemanticStore:
 
     # --- write --------------------------------------------------------------
     def add_turn(self, user_input: str, assistant_reply: str, scope=None) -> None:
-        """Extract candidate facts from the user's message and reconcile each:
-        dedup on a near-duplicate (reinforce), otherwise insert. Supersede is
-        available via supersede() for an LLM-driven extractor."""
-        for fact in extract_facts(user_input):
+        """Extract candidate facts and reconcile each: dedup a near-duplicate
+        (reinforce), supersede a contradiction (when an LLM extractor is wired),
+        otherwise insert. Falls back to heuristic extraction offline."""
+        facts = None
+        if self._use_llm:
+            try:
+                facts = self.extractor.extract(user_input, assistant_reply)
+            except Exception:
+                facts = None
+        for fact in (facts or extract_facts(user_input)):
             self._reconcile(fact, scope)
 
     def _reconcile(self, content: str, scope) -> None:
         emb = self._embed(content)
         best, best_sim = self._nearest(emb, scope)
         if best is not None and best_sim >= _DUP_THRESHOLD:
-            self.touch(best["id"])           # duplicate -> reinforce, don't dup
+            self.touch(best["id"])           # near-identical -> reinforce, don't dup
             return
+        # Moderately similar + an LLM to judge -> possibly a contradiction/update.
+        if self._use_llm and best is not None and best_sim >= _SIM_LOW:
+            try:
+                verdict = self.extractor.judge(content, best["content"])
+            except Exception:
+                verdict = "unrelated"
+            if verdict == "same":
+                self.touch(best["id"])
+                return
+            if verdict == "contradicts":
+                self.supersede(best["id"],
+                               MemoryItem(content=content, kind=ItemKind.FACT, scope=scope))
+                return
         self.upsert(MemoryItem(content=content, kind=ItemKind.FACT, scope=scope))
 
     def upsert(self, item: MemoryItem) -> None:

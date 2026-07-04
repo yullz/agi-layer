@@ -254,6 +254,32 @@ def main() -> int:
     ns.decay(half_life_days=30, cold_threshold=0.15)
     check("decay archives cold items", ns.count_current("p") < before)
 
+    # 13) LLM-driven extraction + contradiction -> supersede (scripted stub model)
+    print("\n13) LLM extraction + contradiction supersede")
+    from memory.extractor import LLMExtractor
+
+    class _StubLLM:
+        model_name, is_local = "stub", True
+
+        def available(self):
+            return True
+
+        def generate(self, prompt, tools=None):
+            sysmsg = prompt[0]["content"] if prompt and isinstance(prompt[0], dict) else ""
+            if "CONTRADICTS" in sysmsg:          # judge call
+                return "CONTRADICTS"
+            if "JSON array" in sysmsg:           # extract call
+                return '["I live in Berlin"]'
+            return ""
+
+    ns2 = NativeSemanticStore(os.path.join(tmp, "llmsem"), extractor=LLMExtractor(_StubLLM()))
+    ns2.upsert(MemoryItem(content="I live in Sofia.", scope="x"))
+    ns2.add_turn("(the turn text)", "", scope="x")   # stub extracts "I live in Berlin"
+    live = [h.content for h in ns2.search("where do I live", scope="x")]
+    check("LLM extraction produced a current fact", ns2.count_current("x") == 1)
+    check("contradiction superseded the stale fact",
+          any("Berlin" in c for c in live) and not any("Sofia" in c for c in live))
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

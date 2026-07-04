@@ -1284,6 +1284,91 @@ def main() -> int:
     check("web brain reports the picker options + efforts",
           any(o["value"] == "auto" for o in _ra["options"]) and "balanced" in _ra["efforts"])
 
+    # attachments: text files fold into the prompt; images reach a vision model.
+    from models.multimodal import images_of as _iof
+    from models.multimodal import text_of as _tof
+    check("multimodal text_of flattens blocks to text",
+          _tof([{"type": "text", "text": "hi"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAA"}}]) == "hi")
+    check("multimodal images_of extracts the base64 payload",
+          _iof([{"type": "image_url", "image_url": {"url": "data:image/png;base64,AAA"}}]) == ["AAA"])
+    from core.orchestrator import _attach_images as _ai
+    _mm = [{"role": "user", "content": "look"}]
+    _ai(_mm, [{"mime": "image/png", "b64": "AAA"}])
+    check("_attach_images makes the last user turn multimodal",
+          isinstance(_mm[0]["content"], list)
+          and any(b.get("type") == "image_url" for b in _mm[0]["content"]))
+
+    from models.registry import ModelRegistry as _MR
+    from models.local import LocalModel as _LM
+    from models.agent_sdk import AgentSDKModel as _ASM
+    _vr = _MR({"models": [{"name": "v", "adapter": "local", "model": "x", "capabilities": ["vision"]},
+                          {"name": "t", "adapter": "local", "model": "y", "capabilities": ["tools"]}],
+               "defaults": {}}, None, _LM)
+    check("registry sets supports_vision from capabilities",
+          _vr.get("v").supports_vision is True and _vr.get("t").supports_vision is False)
+    _cr = _MR({"models": [{"name": "c", "adapter": "agent_sdk", "capabilities": ["vision"]}],
+               "defaults": {}}, None, _LM, agent_sdk_factory=_ASM)
+    check("agent_sdk stays text-only for images despite a vision capability",
+          _cr.get("c").supports_vision is False)
+
+    class _CapModel:
+        is_local = True
+        model_name = "capm"
+        def __init__(self, vision): self.supports_vision = vision
+        def available(self): return True
+
+    class _CapRouter:
+        registry = None
+        def __init__(self, vision): self._m = _CapModel(vision); self.seen = []
+        def pick(self, q, c, scope=None): return self._m
+        def generate(self, model, prompt, tools=None):
+            self.seen.append(prompt); return model, "ok"
+
+    def _caporch(router, tag):
+        m, _e, _s = build_memory(os.path.join(tmp, "att_" + tag))
+        o = Orchestrator(memory=m, router=router, context_builder=ContextBuilder(),
+                         skills=Skills(), feedback=Feedback())
+        o.tools = None; o.agent = None
+        o.data_dir = os.path.join(tmp, "att_" + tag + "_d"); o.onboarding = None
+        return o
+
+    def _seen_text(router):
+        return " ".join(_tof(m.get("content")) for call in router.seen
+                        for m in call if isinstance(m, dict))
+
+    def _seen_images(router):
+        return [im for call in router.seen for m in call if isinstance(m, dict)
+                for im in _iof(m.get("content"))]
+
+    _vr1 = _CapRouter(True)
+    WebApp(_caporch(_vr1, "txt")).chat(
+        "summarize this",
+        attachments=[{"name": "notes.txt", "mime": "text/plain", "kind": "text",
+                      "content": "Milk and eggs."}])
+    check("web attach: a text file's content reaches the prompt",
+          "Milk and eggs" in _seen_text(_vr1))
+
+    _vr2 = _CapRouter(True)
+    WebApp(_caporch(_vr2, "img")).chat(
+        "what is this",
+        attachments=[{"name": "c.png", "mime": "image/png", "kind": "image",
+                      "content": "data:image/png;base64,QUJD"}])
+    check("web attach: an image reaches a vision model as an image block",
+          _seen_images(_vr2) == ["QUJD"])
+
+    _vr3 = _CapRouter(False)
+    WebApp(_caporch(_vr3, "nov")).chat(
+        "what is this",
+        attachments=[{"name": "c.png", "mime": "image/png", "kind": "image",
+                      "content": "data:image/png;base64,QUJD"}])
+    check("web attach: a non-vision model gets an image note, not the image",
+          "can't view images" in _seen_text(_vr3) and not _seen_images(_vr3))
+
+    import glob as _glob
+    check("web attach: files are saved under data/uploads",
+          bool(_glob.glob(os.path.join(tmp, "att_txt_d", "uploads", "*notes.txt"))))
+
     # 36) backups — snapshot everything you built (Phase 25)
     print("\n36) backups")
     import tarfile as _tf

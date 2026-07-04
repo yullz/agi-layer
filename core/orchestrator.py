@@ -29,7 +29,8 @@ class Orchestrator:
         self.versioning = versioning
         self.audit = audit
 
-    def handle_turn(self, user_input: str, session: Session, confirm=None) -> str:
+    def handle_turn(self, user_input: str, session: Session, confirm=None,
+                    images=None) -> str:
         session.add_user(user_input)
         scope = session.active_scope
 
@@ -42,6 +43,11 @@ class Orchestrator:
         ctx = self.memory.retrieve(user_input, scope=scope,
                                    budget_tokens=self.budget, for_external=for_external)
         messages = self.context_builder.build(session, ctx, model)
+
+        # Attach any images to this turn — but only for a model that can actually
+        # see them; text-only models just get the accompanying text note.
+        if images and getattr(model, "supports_vision", False):
+            _attach_images(messages, images)
 
         # ASSEMBLE + GENERATE. With a capable (tool-following) model wired to the
         # agent, plain natural language runs through the conversational agent loop
@@ -94,3 +100,21 @@ class Orchestrator:
         self.policy.version = approved.version
         return {"status": "applied", "version": approved.version,
                 "routing_rules": approved.routing_rules}
+
+
+def _attach_images(messages, images) -> None:
+    """Rewrite the latest user message into OpenAI-style multimodal content so a
+    vision model receives the image(s) alongside the text. `images` is a list of
+    {"mime", "b64"}."""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            text = m.get("content", "")
+            blocks = [{"type": "text", "text": text if isinstance(text, str) else str(text)}]
+            for im in images:
+                mime = im.get("mime") or "image/png"
+                b64 = im.get("b64") or ""
+                if b64:
+                    blocks.append({"type": "image_url",
+                                   "image_url": {"url": f"data:{mime};base64,{b64}"}})
+            m["content"] = blocks
+            return

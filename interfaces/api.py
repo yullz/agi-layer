@@ -34,11 +34,18 @@ def build_app(orchestrator, store=None):
     web = WebApp(orchestrator)
     app = FastAPI(title="Myro")
 
+    class Attachment(BaseModel):
+        name: str = "file"
+        mime: str = ""
+        kind: str = ""        # 'text' | 'image'
+        content: str = ""     # file text, or a data: URL for images
+
     class ChatIn(BaseModel):
-        text: str
+        text: str = ""
         sid: str = "default"
         scope: str | None = None
         allow_actions: bool = True
+        attachments: list[Attachment] | None = None
 
     class Fact(BaseModel):
         fact: str
@@ -72,8 +79,12 @@ def build_app(orchestrator, store=None):
     # --- app API (browser <-> Myro) ---
     @app.post("/api/chat")
     def chat(body: ChatIn):
+        atts = None
+        if body.attachments:
+            atts = [a.model_dump() if hasattr(a, "model_dump") else a.dict()
+                    for a in body.attachments]
         return web.chat(body.text, sid=body.sid, scope=body.scope,
-                        allow_actions=body.allow_actions)
+                        allow_actions=body.allow_actions, attachments=atts)
 
     @app.post("/api/onboarding/start")
     def onboarding_start(body: SidIn):

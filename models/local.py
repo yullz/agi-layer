@@ -30,8 +30,20 @@ class LocalModel:
             return False
 
     def generate(self, prompt, tools=None) -> str:
-        messages = prompt if isinstance(prompt, list) else [
+        raw = prompt if isinstance(prompt, list) else [
             {"role": "user", "content": str(prompt)}]
+        # Ollama wants plain-text content plus a separate `images` list (base64),
+        # so translate any OpenAI-style image blocks into that shape.
+        from models.multimodal import images_of, text_of
+        messages = []
+        for m in raw:
+            if not isinstance(m, dict):
+                continue
+            msg = {"role": m.get("role", "user"), "content": text_of(m.get("content"))}
+            imgs = images_of(m.get("content"))
+            if imgs:
+                msg["images"] = imgs
+            messages.append(msg)
         payload = {"model": self.model_name, "messages": messages, "stream": False}
         if tools:
             payload["tools"] = tools

@@ -6,6 +6,8 @@ from raw turns; replace with an NER pass or an LLM extractor for precision.
 """
 from __future__ import annotations
 
+import re
+
 _STOP = {
     "The", "This", "That", "These", "Those", "And", "But", "For", "With",
     "You", "Your", "Yours", "Our", "Ours", "They", "Them", "His", "Her",
@@ -28,3 +30,23 @@ def extract_entities(text: str, limit: int = 12) -> list[str]:
         if len(seen) >= limit:
             break
     return list(seen)
+
+
+_CUE = (" i ", " i'm ", " i've ", " my ", " me ", " mine ", " we ", " our ")
+
+
+def extract_facts(text: str, max_facts: int = 5) -> list[str]:
+    """Heuristic candidate durable facts: sentences that talk about the user (a
+    first-person cue). Replace with an LLM extractor for precision — the
+    reconcile step downstream dedups whatever this emits."""
+    facts = []
+    for sent in re.split(r"[.!?\n]+", text or ""):
+        s = sent.strip()
+        if len(s) < 8:
+            continue
+        low = f" {s.lower()} "
+        if s.lower().startswith(("i ", "my ", "i'm", "i've")) or any(c in low for c in _CUE):
+            facts.append(s)
+        if len(facts) >= max_facts:
+            break
+    return facts

@@ -32,6 +32,7 @@ from memory.episodic import EpisodicStore
 from memory.graph import GraphStore
 from memory.procedural import ProceduralStore
 from memory.semantic import SemanticStore
+from memory.semantic_native import NativeSemanticStore
 from memory.store import MemoryStore
 from memory.write_path import WritePipeline
 from models.embeddings import Embedder
@@ -51,7 +52,10 @@ def build():
 
     # --- Stores ---
     episodic = EpisodicStore(cfg.episodic_db)
-    semantic = SemanticStore(cfg.vector_dir, embedder)
+    if cfg.semantic_backend == "mem0":
+        semantic = SemanticStore(cfg.vector_dir, embedder)      # hybrid engine
+    else:
+        semantic = NativeSemanticStore(cfg.vector_dir, embedder)  # owned store
     graph = GraphStore(cfg.graph_dir)
     procedural = ProceduralStore(cfg.episodic_db)
 

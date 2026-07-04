@@ -112,5 +112,6 @@ def _default_mem0_config(vector_dir: str) -> dict | None:
     return {
         "llm": {"provider": "ollama", "config": {"model": "qwen3:14b"}},
         "embedder": {"provider": "ollama", "config": {"model": "nomic-embed-text"}},
-        "vector_store": {"provider": "chroma", "config": {"path": f"{vector_dir}/mem0"}},
+        "vector_store": {"provider": "chroma",
+                         "config": {"path": os.path.join(str(vector_dir), "mem0")}},
     }

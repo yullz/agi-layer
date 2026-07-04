@@ -4,9 +4,10 @@
 
 # --- core (always) ---
 pyyaml>=6
+tzdata                  # timezone database for zoneinfo (Windows ships none)
 
 # --- turn on real models (pick what you use) ---
-claude-agent-sdk        # Claude on your Pro/Max subscription (the default backend)
+# claude-agent-sdk      # Claude on your Pro/Max subscription (the default backend)
 # litellm               # Claude/GPT/Gemini via an API key (overflow / alternative)
 # Local models use Ollama's HTTP API directly (no Python client needed).
 

@@ -31,7 +31,8 @@ import urllib.request
 def _run_git(path, args, timeout: float = 10.0) -> str:
     try:
         r = subprocess.run(["git", "-C", str(path or "."), *args],
-                           capture_output=True, text=True, timeout=timeout)
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=timeout)
         return ((r.stdout or "") + (r.stderr or "")).strip()
     except Exception as e:
         return f"(error: {e})"

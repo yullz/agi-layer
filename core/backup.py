@@ -126,7 +126,8 @@ def _git_backup(git_dir: str, snapshot_path: str) -> str:
         shutil.copy2(snapshot_path, git_dir)
         out = ""
         for cmd in _git_backup_cmds(git_dir, os.path.basename(snapshot_path)):
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=120)
             out = (r.stdout + r.stderr).strip()
         return "pushed to GitHub"
     except Exception as e:

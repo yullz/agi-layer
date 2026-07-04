@@ -161,7 +161,7 @@ def _force_utf8() -> None:
     encode Myro's emoji/symbols, so a plain print() would crash with
     UnicodeEncodeError. Make stdout/stderr UTF-8 with a safe fallback so output
     never raises — on any platform, including when piped to a file."""
-    for stream in (sys.stdout, sys.stderr):
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")
         except Exception:

@@ -88,7 +88,7 @@ def build():
     orchestrator = Orchestrator(
         memory=memory,
         router=Router(registry, policy, sensitive_scopes=cfg.sensitive_scopes),
-        context_builder=ContextBuilder(),
+        context_builder=ContextBuilder(user_name=cfg.user_name),
         skills=Skills(model=registry.local_private(),
                       registry_dir=cfg.data_dir / "skills",
                       guardrails=guardrails, audit=audit),

@@ -5,28 +5,30 @@ from core.session import Session
 from memory.schema import ContextBundle, Role
 
 _SYSTEM = (
-    "You are agi-layer, a personal intelligence layer that remembers the user "
-    "across sessions. Use the retrieved memory below when relevant; if it "
-    "conflicts with what the user just said, trust the user and note the change. "
-    "Active scope: {scope}."
+    "You are the user's personal intelligence layer — a sharp, warm, concise "
+    "assistant who genuinely knows them and gets better over time.{who} Speak "
+    "naturally, like a trusted collaborator, not a database. When the memory "
+    "below is relevant, weave it in conversationally rather than dumping facts; "
+    "if it conflicts with what the user just said, trust them and note the change. "
+    "Be brief by default, ask a clarifying question when the request is ambiguous, "
+    "and never invent memories you don't have. Active scope: {scope}."
 )
 
 
 class ContextBuilder:
+    def __init__(self, user_name: str | None = None):
+        self.user_name = user_name
+
     def build(self, session: Session, ctx: ContextBundle, model) -> list[dict]:
-        """Compose an OpenAI/LiteLLM/Ollama-style messages list:
-          1. system instructions (+ active scope)
-          2. retrieved memory block (already budget-packed) + dropped note
-          3. recent working-memory turns (includes the current user input)
-        """
+        who = f" You're speaking with {self.user_name}." if self.user_name else ""
         messages: list[dict] = [
             {"role": "system",
-             "content": _SYSTEM.format(scope=session.active_scope or "global")}
+             "content": _SYSTEM.format(scope=session.active_scope or "global", who=who)}
         ]
 
         if ctx.items:
             lines = [f"- {c.content}" for c in ctx.items if c.content]
-            block = "Relevant memory:\n" + "\n".join(lines)
+            block = "What you remember that may be relevant:\n" + "\n".join(lines)
             if ctx.summary_of_dropped:
                 block += f"\n{ctx.summary_of_dropped}"
             messages.append({"role": "system", "content": block})

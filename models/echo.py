@@ -1,10 +1,9 @@
 """Echo model — a zero-dependency, offline backend.
 
-Not an assistant: it echoes the user's last message and states that no real
-model is configured. Its job is to make the whole turn loop runnable out of the
-box (no API key, no Ollama) so you can exercise memory + routing before wiring a
-real model. The router falls back to this when nothing else is reachable. Swap
-it out the moment a frontier key or a local runtime is up.
+Not an assistant: it's a friendly placeholder so the whole turn loop runs out of
+the box (no API key, no Ollama) while still saving everything to memory. The
+router falls back to this when nothing else is reachable; swap it out the moment
+a frontier key or a local runtime is up.
 """
 from __future__ import annotations
 
@@ -20,24 +19,8 @@ class EchoModel:
         return True
 
     def generate(self, prompt, tools=None) -> str:
-        user = _last_user(prompt)
         return (
-            f"[echo] No real model is configured yet, so I can't reason — but I "
-            f"received: {user!r}. Set a frontier API key or start a local Ollama "
-            f"model to enable real replies."
+            "I'm in offline mode right now (no model configured), so I can't reason "
+            "about that properly yet — but I've kept it in memory. Start a local "
+            "Ollama model or set an API key to switch me on."
         )
-
-
-def _last_user(prompt) -> str:
-    """Pull the last user message out of whatever prompt shape we got — a
-    messages list of {role, content}, or a plain string."""
-    if isinstance(prompt, str):
-        return prompt
-    if isinstance(prompt, list):
-        for msg in reversed(prompt):
-            if isinstance(msg, dict) and msg.get("role") == "user":
-                return str(msg.get("content", ""))
-        if prompt:
-            last = prompt[-1]
-            return str(last.get("content", last) if isinstance(last, dict) else last)
-    return str(prompt)

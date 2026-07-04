@@ -93,7 +93,7 @@ def main() -> int:
     sess2 = Session(scope="demo")
     reply = orch.handle_turn("Hello, what do you know about my dog?", sess2)
     check("handle_turn returns a reply", isinstance(reply, str) and len(reply) > 0)
-    check("router fell back to echo (no key / Ollama)", "echo" in reply.lower())
+    check("router fell back to echo (no key / Ollama)", "offline" in reply.lower())
 
     bundle2 = mem.retrieve("dog border collie", scope="demo", budget_tokens=2000)
     check("cross-session recall still finds the fact",

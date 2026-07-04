@@ -406,6 +406,61 @@ def main() -> int:
     check("active-learning answer is stored",
           any("Yulian" in p["content"] for p in imem.provenance(slot["key"], scope="work")))
 
+    # 19) agent execution layer — governed tool use + routines (Phase 11)
+    print("\n19) agent tools + routines")
+    from core.agent import Agent
+    from core.routines import Routines
+    from core.tools import build_default_tools
+    from governance.audit import Audit as _Audit
+
+    class _ScriptRouter:
+        """A router whose model emits a scripted sequence of tool-call / final
+        JSON replies — exercises the agent loop with zero external services."""
+
+        def __init__(self, scripts):
+            self._scripts = list(scripts)
+            self.registry = None
+
+        def pick(self, query, ctx, scope=None):
+            return object()
+
+        def generate(self, model, prompt, tools=None):
+            reply = self._scripts.pop(0) if self._scripts else '{"final": "done"}'
+            return model, reply
+
+    a_tools = build_default_tools(None)
+    a_audit = _Audit(os.path.join(tmp, "agent_audit.jsonl"))
+    # calc a value across two steps, then answer with it
+    agent = Agent(_ScriptRouter(['{"tool": "calc", "args": {"expression": "6*7"}}',
+                                 '{"final": "The answer is 42."}']),
+                  a_tools, audit=a_audit)
+    ares = agent.run("what is 6 times 7", scope=None, confirm=lambda *_: True)
+    check("agent calls a tool then answers",
+          ares["answer"] == "The answer is 42." and
+          any(s["tool"] == "calc" and str(s["result"]) == "42" for s in ares["steps"]))
+
+    # a gated tool (run_shell) is denied fail-closed without confirmation
+    agent_b = Agent(_ScriptRouter(['{"tool": "run_shell", "args": {"command": "echo hi"}}',
+                                   '{"final": "could not run it"}']),
+                    a_tools, audit=a_audit)
+    bres = agent_b.run("run echo hi", scope=None, confirm=None)
+    check("gated tool denied without confirmation",
+          any(s["tool"] == "run_shell" and "denied" in str(s["result"])
+              for s in bres["steps"]))
+    check("agent tool calls are audited", len(a_audit.tail()) >= 2)
+
+    # routines: add, list, run unattended, and persist across a restart
+    agent_c = Agent(_ScriptRouter(['{"tool": "calc", "args": {"expression": "2+2"}}',
+                                   '{"final": "4"}']),
+                    a_tools, audit=a_audit)
+    routines = Routines(os.path.join(tmp, "routines.json"), agent_c)
+    routines.add("mathcheck", "compute 2+2", scope=None)
+    check("routine saved + listed", "mathcheck" in routines.list())
+    rres = routines.run("mathcheck")
+    check("routine runs unattended", rres["status"] == "ran" and rres["answer"] == "4")
+    routines2 = Routines(os.path.join(tmp, "routines.json"), agent_c)
+    check("routines persist across restart", "mathcheck" in routines2.list())
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

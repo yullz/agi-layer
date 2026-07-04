@@ -19,11 +19,14 @@ from governance.audit import Audit
 from governance.guardrails import Guardrails
 from governance.versioning import Versioning
 from improvement.optimizer import Optimizer
+from core.agent import Agent
 from core.context_builder import ContextBuilder
 from core.orchestrator import Orchestrator
 from core.policy import Policy
 from core.router import Router
+from core.routines import Routines
 from core.session import Session
+from core.tools import build_default_tools
 from improvement.feedback import Feedback
 from improvement.skills import Skills
 from interfaces.cli import run_repl
@@ -85,9 +88,10 @@ def build():
     guardrails = Guardrails()
     versioning = Versioning(cfg.data_dir / "versions")
     audit = Audit(cfg.data_dir / "audit.jsonl")
+    router = Router(registry, policy, sensitive_scopes=cfg.sensitive_scopes)
     orchestrator = Orchestrator(
         memory=memory,
-        router=Router(registry, policy, sensitive_scopes=cfg.sensitive_scopes),
+        router=router,
         context_builder=ContextBuilder(user_name=cfg.user_name),
         skills=Skills(model=registry.local_private(),
                       registry_dir=cfg.data_dir / "skills",
@@ -100,6 +104,15 @@ def build():
         versioning=versioning,
         audit=audit,
     )
+
+    # --- Agent execution layer (the "hands") ---
+    # Tools + a governed, model-agnostic tool-use loop, plus saved routines.
+    # Every tool call is audited; write/exec tools are gated (confirm required),
+    # and routines run unattended so those gated tools are denied fail-closed.
+    tools = build_default_tools(memory)
+    orchestrator.tools = tools
+    orchestrator.agent = Agent(router, tools, audit=audit)
+    orchestrator.routines = Routines(cfg.data_dir / "routines.json", orchestrator.agent)
     return cfg, orchestrator
 
 

@@ -153,6 +153,58 @@ def _handle_command(line, orch, session) -> bool:
         else:
             print("I don't have a memory behind that.")
         return True
+    # --- agent execution layer (do tasks, tools, automations) ---------------
+    if line.startswith(":do "):
+        agent = getattr(orch, "agent", None)
+        if agent is None:
+            print("My agent isn't available right now.")
+            return True
+        res = agent.run(line.split(" ", 1)[1].strip(),
+                        scope=session.active_scope, confirm=_cli_confirm)
+        _print_run(res)
+        return True
+    if line == ":tools":
+        tools = getattr(orch, "tools", None)
+        if tools is None:
+            print("No tools registered.")
+            return True
+        print("Tools I can use:")
+        for s in tools.specs():
+            gate = "" if s["unattended"] else "  (asks first)"
+            print(f"  • {s['name']}({', '.join(s['args'])}) — {s['description']}{gate}")
+        return True
+    if line.startswith(":automate "):
+        routines = getattr(orch, "routines", None)
+        rest = line.split(" ", 1)[1]
+        if routines is None or "=" not in rest:
+            print("Use:  :automate <name> = <task>")
+            return True
+        name, task = (p.strip() for p in rest.split("=", 1))
+        routines.add(name, task, scope=session.active_scope)
+        print(f"Saved routine “{name}”. Run it anytime with  :run {name}.")
+        return True
+    if line == ":routines":
+        routines = getattr(orch, "routines", None)
+        items = routines.list() if routines else {}
+        if items:
+            print("Saved routines:")
+            for name, it in items.items():
+                where = f"  [{it['scope']}]" if it.get("scope") else ""
+                print(f"  • {name}: {it['task']}{where}")
+        else:
+            print("No routines yet — create one with  :automate <name> = <task>.")
+        return True
+    if line.startswith(":run "):
+        routines = getattr(orch, "routines", None)
+        if routines is None:
+            print("Routines aren't available right now.")
+            return True
+        res = routines.run(line.split(" ", 1)[1].strip())
+        if res.get("status") == "no-such-routine":
+            print(f"I don't have a routine called “{res['name']}”.")
+            return True
+        _print_run(res)
+        return True
     if line.startswith(":"):
         print(f"I don't know the command “{line}” — try  :help.")
         return True
@@ -161,7 +213,11 @@ def _handle_command(line, orch, session) -> bool:
 
 _HELP = (
     "Commands:\n"
-    "  :help / ?             show this\n"
+    "  :do <task>            let me do a task using my tools\n"
+    "  :tools                what tools I can use\n"
+    "  :automate <n> = <t>   save task <t> as a routine named <n>\n"
+    "  :routines             list saved routines\n"
+    "  :run <name>           run a saved routine (unattended)\n"
     "  :memory [topic]       what I remember (optionally about a topic)\n"
     "  :remember <fact>      tell me something to remember\n"
     "  :forget <text>        forget matching memories\n"
@@ -178,6 +234,31 @@ _HELP = (
     "  exit / quit           leave\n"
     "Anything else is a message to me."
 )
+
+
+def _cli_confirm(tool, args) -> bool:
+    """Interactive gate for tools that write or execute — default No."""
+    try:
+        ans = input(f"  ⚠ allow {tool}({_fmt_args(args)})? [y/N] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    return ans in ("y", "yes")
+
+
+def _print_run(res) -> None:
+    for s in res.get("steps", []):
+        print(f"  · {s['tool']}({_fmt_args(s['args'])}) → {_short(s['result'])}")
+    print(f"layer> {res.get('answer', '')}")
+
+
+def _fmt_args(args) -> str:
+    return ", ".join(f"{k}={_short(v, 40)}" for k, v in (args or {}).items())
+
+
+def _short(text, limit: int = 80) -> str:
+    text = str(text).replace("\n", " ").strip()
+    return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
 def _optimize_msg(res) -> str:

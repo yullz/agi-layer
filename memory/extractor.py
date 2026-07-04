@@ -30,6 +30,12 @@ _RELATION_SYS = (
     "snake_case verb (works_on, uses, lives_in, prefers, knows). Output a JSON "
     "array of 3-element arrays; [] if none. Keep subject/object short."
 )
+_DOC_SYS = (
+    "From this document, extract durable facts worth remembering about the user "
+    "and their world (projects, tools, decisions, people, preferences). Output a "
+    "JSON array of short factual strings; [] if nothing durable. Be selective — "
+    "skip boilerplate; capture what a personal assistant should know later."
+)
 
 
 class LLMExtractor:
@@ -72,6 +78,14 @@ class LLMExtractor:
             [{"role": "system", "content": _RELATION_SYS},
              {"role": "user", "content": text or ""}])
         return _parse_triples(reply)
+
+    def extract_from_text(self, text: str) -> list[str]:
+        """Extract durable facts from arbitrary document text (not just
+        first-person chat) — used by file/folder ingestion."""
+        reply = self.model.generate(
+            [{"role": "system", "content": _DOC_SYS},
+             {"role": "user", "content": (text or "")[:4000]}])
+        return _parse_json_list(reply)
 
 
 def _parse_json_list(text: str) -> list[str]:

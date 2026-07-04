@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 
 from memory import retrieval
-from memory.schema import ContextBundle, Source, Turn
+from memory.schema import ContextBundle, MemoryItem, Source, Turn
 from memory.scope import is_sensitive_scope
 
 
@@ -111,6 +111,46 @@ class MemoryStore:
                     closer()
                 except Exception:
                     pass
+
+    # --- memory control (curate what it knows) ------------------------------
+    def remember(self, content: str, scope: str | None = None):
+        """Store a durable fact (reconciled) and update the graph from it."""
+        item_id = None
+        fn = getattr(self.semantic, "remember", None)
+        try:
+            if callable(fn):
+                item_id = fn(content, scope)
+            else:
+                self.semantic.upsert(MemoryItem(content=content, scope=scope))
+        except Exception:
+            pass
+        try:
+            self.write_pipeline._update_graph(
+                Turn(user_input=content, assistant_reply="", scope=scope))
+        except Exception:
+            pass
+        return item_id
+
+    def forget(self, query: str, scope: str | None = None) -> int:
+        fn = getattr(self.semantic, "forget", None)
+        try:
+            return fn(query, scope) if callable(fn) else 0
+        except Exception:
+            return 0
+
+    def correct(self, old_query: str, new_content: str, scope: str | None = None) -> bool:
+        fn = getattr(self.semantic, "correct", None)
+        try:
+            return fn(old_query, new_content, scope) if callable(fn) else False
+        except Exception:
+            return False
+
+    def provenance(self, query: str, scope: str | None = None) -> list:
+        fn = getattr(self.semantic, "provenance", None)
+        try:
+            return fn(query, scope) if callable(fn) else []
+        except Exception:
+            return []
 
 
 # --- retriever adapters (store -> retrieval.Retriever) ----------------------

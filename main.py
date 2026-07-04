@@ -153,11 +153,12 @@ def build():
     orchestrator.routines = Routines(cfg.data_dir / "routines.json",
                                      orchestrator.agent, tz=tz)
     orchestrator.onboarding = onboarding
-    # Brain preference: honor the saved local-vs-auto choice (or the AGI_PREFER_LOCAL
-    # seed on first run). Sensitive scopes stay on-box regardless of this.
-    from core.brain import apply_preference, load_pref
-    saved = load_pref(cfg.data_dir)
-    apply_preference(policy, registry, cfg.prefer_local if saved is None else saved)
+    # Brain selection: honor the saved model + effort choice (or the
+    # AGI_PREFER_LOCAL seed on first run). Sensitive scopes stay on-box regardless.
+    from core.brain import DEFAULT_EFFORT, apply_choice, load_state, set_effort
+    state = load_state(cfg.data_dir)
+    apply_choice(policy, registry, state.get("model") or ("local" if cfg.prefer_local else "auto"))
+    set_effort(registry, state.get("effort") or DEFAULT_EFFORT)
     orchestrator.data_dir = cfg.data_dir
     return cfg, orchestrator
 

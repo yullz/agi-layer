@@ -1198,13 +1198,16 @@ def main() -> int:
           all(k in _all for k in ("serve", "browser", "voice", "backup",
                                   "schedule", "subscription")))
 
-    # brain preference: keep everyday chat on the local model, or auto-route.
+    # brain: pick which model answers (Auto or pinned) + a Claude effort level.
     from core import brain as _brn
     from core.policy import Policy as _Pol
     from core.router import Router as _Rtr
+    from models.agent_sdk import _apply_effort as _ae
 
     class _BM:
-        def __init__(self, local): self.is_local = local
+        def __init__(self, local, name=None):
+            self.is_local = local
+            self.model_name = name or ("loc-model" if local else "cloud-model")
 
     class _BReg:
         def __init__(self, models, defaults): self._m = models; self._d = defaults
@@ -1213,26 +1216,49 @@ def main() -> int:
         def names(self): return list(self._m)
         def fallback(self): return self._m.get("echo")
 
-    _reg = _BReg({"loc": _BM(True), "cloud": _BM(False), "echo": _BM(True)},
-                 {"private": "loc", "general": "cloud", "hard_reasoning": "cloud", "fallback": "echo"})
-    _pol = _Pol()
-    check("brain prefer-local pins general+hard_reasoning to a local model",
-          _brn.apply_preference(_pol, _reg, True)
-          and _pol.routing_rules.get("general") == "loc"
-          and _pol.routing_rules.get("hard_reasoning") == "loc")
-    check("brain is_local_preferred reflects the pinned rule",
-          _brn.is_local_preferred(_pol, _reg))
-    _brn.apply_preference(_pol, _reg, False)
-    check("brain auto clears the local pin",
-          "general" not in _pol.routing_rules and not _brn.is_local_preferred(_pol, _reg))
-    _pol2 = _Pol()
-    _reg2 = _BReg({"cloud": _BM(False)}, {"general": "cloud", "hard_reasoning": "cloud"})
-    check("brain prefer-local no-ops gracefully when no local model exists",
-          _brn.apply_preference(_pol2, _reg2, True) is False and "general" not in _pol2.routing_rules)
+    def _mkreg():
+        return _BReg({"qwen-local": _BM(True), "cloud": _BM(False), "echo": _BM(True)},
+                     {"private": "qwen-local", "general": "cloud",
+                      "hard_reasoning": "cloud", "fallback": "echo"})
+
+    _reg = _mkreg(); _pol = _Pol()
+    check("brain apply_choice pins a named model for general+hard_reasoning",
+          _brn.apply_choice(_pol, _reg, "cloud") == "cloud"
+          and _pol.routing_rules.get("general") == "cloud"
+          and _pol.routing_rules.get("hard_reasoning") == "cloud")
+    check("brain current_choice reports the pinned model",
+          _brn.current_choice(_pol, _reg) == "cloud")
+    check("brain 'local' resolves to the on-box model",
+          _brn.apply_choice(_pol, _reg, "local") == "qwen-local"
+          and _pol.routing_rules.get("general") == "qwen-local")
+    check("brain 'auto' clears the pin",
+          _brn.apply_choice(_pol, _reg, "auto") == "auto"
+          and "general" not in _pol.routing_rules
+          and _brn.current_choice(_pol, _reg) == "auto")
+    check("brain unknown model falls back to auto (no-op pin)",
+          _brn.apply_choice(_pol, _reg, "nope") == "auto" and "general" not in _pol.routing_rules)
+    _opts = _brn.options(_reg)
+    check("brain options list Auto first, then every model",
+          _opts[0]["value"] == "auto" and any(o["value"] == "qwen-local" for o in _opts))
+    check("brain effort applies to cloud adapters + reads back",
+          _brn.set_effort(_reg, "thorough") == "thorough"
+          and _brn.current_effort(_reg) == "thorough"
+          and _reg.get("cloud").effort == "thorough")
+    check("brain effort ignores junk (falls to balanced)",
+          _brn.set_effort(_reg, "nonsense") == "balanced")
+    check("brain effort steers the Claude prompt (thorough adds a directive)",
+          "step by step" in _ae("", "thorough").lower() and _ae("sys", "balanced") == "sys")
     _bd = os.path.join(tmp, "brainpref"); os.makedirs(_bd, exist_ok=True)
-    _brn.save_pref(_bd, True)
-    check("brain preference persists + reloads",
-          _brn.load_pref(_bd) is True and _brn.load_pref(os.path.join(tmp, "nope")) is None)
+    _brn.save_state(_bd, "qwen-local", "quick")
+    _ls = _brn.load_state(_bd)
+    check("brain choice + effort persist and reload",
+          _ls.get("model") == "qwen-local" and _ls.get("effort") == "quick")
+    import json as _json
+    _bd2 = os.path.join(tmp, "brainold"); os.makedirs(_bd2, exist_ok=True)
+    with open(os.path.join(_bd2, "brain.json"), "w", encoding="utf-8") as _f:
+        _json.dump({"prefer_local": True}, _f)
+    check("brain reads the older prefer_local marker as 'local'",
+          _brn.load_state(_bd2).get("model") == "local")
 
     os.environ["AGI_PREFER_LOCAL"] = "1"
     try:
@@ -1241,21 +1267,22 @@ def main() -> int:
     finally:
         os.environ.pop("AGI_PREFER_LOCAL", None)
 
-    # web app path: the Settings toggle switches brains and reports the active one.
+    # web app path: the Settings picker changes model + effort and reports state.
     class _BrainOrch:
         def __init__(self, reg):
             self.policy = _Pol(); self.router = _Rtr(reg, self.policy)
             self.data_dir = os.path.join(tmp, "brainweb")
             self.context_builder = ContextBuilder(); self.onboarding = None
-    _bwa = WebApp(_BrainOrch(_BReg(
-        {"loc": _BM(True), "cloud": _BM(False), "echo": _BM(True)},
-        {"private": "loc", "general": "cloud", "hard_reasoning": "cloud", "fallback": "echo"})))
-    _rl = _bwa.set_brain("local")
-    check("web set_brain local switches to a local brain",
-          _rl["ok"] and _rl["mode"] == "local" and _rl["local"])
-    _ra = _bwa.set_brain("auto")
-    check("web set_brain auto returns to cloud routing",
-          _ra["mode"] == "auto" and not _ra["local"])
+    _bwa = WebApp(_BrainOrch(_mkreg()))
+    _rl = _bwa.set_model("qwen-local")
+    check("web set_model pins the chosen model (local, private)",
+          _rl["ok"] and _rl["choice"] == "qwen-local" and _rl["local"])
+    _re = _bwa.set_effort("thorough")
+    check("web set_effort updates the effort level", _re["ok"] and _re["effort"] == "thorough")
+    _ra = _bwa.set_model("auto")
+    check("web set_model auto returns to automatic routing", _ra["choice"] == "auto")
+    check("web brain reports the picker options + efforts",
+          any(o["value"] == "auto" for o in _ra["options"]) and "balanced" in _ra["efforts"])
 
     # 36) backups — snapshot everything you built (Phase 25)
     print("\n36) backups")

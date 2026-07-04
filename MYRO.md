@@ -172,11 +172,13 @@ Out of the box he uses the echo fallback (so he *always* works). Add Ollama or
 Claude to make him genuinely smart — see **[docs/SETUP.md](./docs/SETUP.md)**,
 Step 4.
 
-**You choose how he picks.** If both a local model and Claude are set up, Myro
-normally routes everyday chat to Claude (sharpest) and keeps anything *private*
-on the local model. Prefer to keep **everything** local — private and free? Flip
-**Settings → Brain → "Prefer my local model"** in the app (or set
-`AGI_PREFER_LOCAL=on`). Sensitive things stay local either way.
+**You choose which model answers.** In the app, **Settings → Brain** has a
+**Model** picker: leave it on **Auto** (Myro picks the best model for each task),
+or pin a specific one — your **Local** model (private & free), **Claude Sonnet**
+(fast), or **Claude Opus** (deepest) — and it's used for *every* prompt until you
+change it. There's also an **Effort** setting (Quick / Balanced / Thorough) for
+how hard Claude thinks. Anything private always stays on the local model, whatever
+you pick. *(Prefer to start local by default? Set `AGI_PREFER_LOCAL=on`.)*
 
 ---
 

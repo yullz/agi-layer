@@ -1,20 +1,28 @@
-"""Terminal interface — a warm, friendly REPL over the orchestrator."""
+"""Terminal interface — a warm, friendly, proactive REPL over the orchestrator."""
 from __future__ import annotations
 
 import os
+import time
 
+from core.proactive import Proactive
 from memory.schema import Role, Source
 
 
 def run_repl(orchestrator, session) -> None:
+    proactive = Proactive(orchestrator.memory)
     n = _memory_count(orchestrator)
     print("\n  agi-layer — your personal intelligence layer")
     print(f"  model: {_model_status(orchestrator)}   ·   memory: {n} fact(s)"
           f"   ·   type  :help  for commands")
     if n == 0:
         print("  My memory's empty — type  :seed  to load what we already know about you.")
+    else:
+        q = proactive.next_question(session.active_scope)
+        if q:
+            print(f"  (I still don't know your {q['key']} — tell me anytime, or type  :learn.)")
     print()
 
+    pending = None
     while True:
         try:
             line = input("you> ").strip()
@@ -27,6 +35,30 @@ def run_repl(orchestrator, session) -> None:
             print("bye 👋")
             break
         try:  # one guard around the whole per-line body — no command can crash the REPL
+            # Capture an answer to a pending active-learning question.
+            if pending is not None and not line.startswith(":"):
+                fact = proactive.fact_from_answer(pending, line)
+                orchestrator.memory.remember(fact, scope=session.active_scope)
+                print(f"Thanks — noted.  ({fact})")
+                pending = None
+                continue
+            if line == ":learn":
+                q = proactive.next_question(session.active_scope)
+                if q:
+                    print(q["q"])
+                    pending = q
+                else:
+                    print("I think I've got the basics — ask me anything.")
+                continue
+            if line in (":briefing", ":brief"):
+                facts = proactive.briefing(session.active_scope)
+                if facts:
+                    print("Here's what's on my radar for you:")
+                    for f in facts:
+                        print(f"  • {f}")
+                else:
+                    print("Nothing notable yet — the more we talk, the more I'll have.")
+                continue
             if _handle_command(line, orchestrator, session):
                 continue
             reply = orchestrator.handle_turn(line, session)
@@ -39,7 +71,6 @@ def run_repl(orchestrator, session) -> None:
 
 
 def _handle_command(line, orch, session) -> bool:
-    """Handle a ':' command / help. Returns True if the line was handled."""
     if line in (":help", "?"):
         print(_HELP)
         return True
@@ -70,7 +101,6 @@ def _handle_command(line, orch, session) -> bool:
     if line in (":memory", ":recall") or line.startswith((":memory ", ":recall ")):
         q = line.split(" ", 1)[1].strip() if " " in line else ""
         bundle = orch.memory.retrieve(q, scope=session.active_scope, budget_tokens=1500)
-        # Show durable memory (facts + graph relations), not raw conversation turns.
         durable = [c for c in bundle.items if c.source in (Source.VECTOR, Source.GRAPH)]
         if durable:
             print("Here's what I remember" + (f" about “{q}”" if q else "") + ":")
@@ -88,6 +118,41 @@ def _handle_command(line, orch, session) -> bool:
         else:
             print("Hmm, I couldn't load the seed data.")
         return True
+    if line.startswith(":ingest "):
+        from memory.ingest import ingest_path
+        ex = getattr(orch.memory.semantic, "extractor", None)
+        r = ingest_path(orch.memory, line.split(" ", 1)[1].strip(),
+                        scope=session.active_scope, extractor=ex)
+        print(f"Read {r['files']} file(s) and learned {r['facts']} thing(s).")
+        return True
+    if line.startswith(":remember "):
+        orch.memory.remember(line.split(" ", 1)[1].strip(), scope=session.active_scope)
+        print("Got it — I'll remember that.")
+        return True
+    if line.startswith(":forget "):
+        n = orch.memory.forget(line.split(" ", 1)[1].strip(), scope=session.active_scope)
+        print(f"Forgot {n} memory(ies)." if n else "Nothing matched — nothing forgotten.")
+        return True
+    if line.startswith(":correct "):
+        rest = line.split(" ", 1)[1]
+        if "=>" in rest:
+            old, new = (p.strip() for p in rest.split("=>", 1))
+            ok = orch.memory.correct(old, new, scope=session.active_scope)
+            print("Updated — thanks for the correction." if ok else "Saved the new version.")
+        else:
+            print("Use:  :correct <old> => <new>")
+        return True
+    if line.startswith(":why "):
+        prov = orch.memory.provenance(line.split(" ", 1)[1].strip(), scope=session.active_scope)
+        if prov:
+            print("Here's what that's based on:")
+            for p in prov:
+                when = (time.strftime("%Y-%m-%d", time.localtime(p["created_at"]))
+                        if p.get("created_at") else "earlier")
+                print(f"  • {p['content']}  ({when})")
+        else:
+            print("I don't have a memory behind that.")
+        return True
     if line.startswith(":"):
         print(f"I don't know the command “{line}” — try  :help.")
         return True
@@ -96,15 +161,21 @@ def _handle_command(line, orch, session) -> bool:
 
 _HELP = (
     "Commands:\n"
-    "  :help / ?          show this\n"
-    "  :memory [topic]    what I remember (optionally about a topic)\n"
-    "  :scope <name>      switch project scope (bare :scope shows current)\n"
-    "  :seed              load what we already know about you\n"
-    "  :good / :bad       rate my last reply\n"
-    "  :optimize          improve my routing from your feedback\n"
-    "  :status            models + memory status\n"
-    "  :about             what this is\n"
-    "  exit / quit        leave\n"
+    "  :help / ?             show this\n"
+    "  :memory [topic]       what I remember (optionally about a topic)\n"
+    "  :remember <fact>      tell me something to remember\n"
+    "  :forget <text>        forget matching memories\n"
+    "  :correct <a> => <b>   replace memory 'a' with 'b'\n"
+    "  :why <topic>          what a memory is based on (+ when)\n"
+    "  :ingest <path>        learn from a file or folder\n"
+    "  :learn                let me ask you something to get to know you\n"
+    "  :briefing             what's on my radar for you\n"
+    "  :scope <name>         switch project scope (bare :scope shows current)\n"
+    "  :seed                 load what we already know about you\n"
+    "  :good / :bad          rate my last reply\n"
+    "  :optimize             improve my routing from your feedback\n"
+    "  :status / :about      status / what this is\n"
+    "  exit / quit           leave\n"
     "Anything else is a message to me."
 )
 

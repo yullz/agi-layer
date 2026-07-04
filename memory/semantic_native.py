@@ -163,6 +163,54 @@ class NativeSemanticStore:
             self._db.execute("UPDATE items SET archived=1 WHERE id=?", (item_id,))
             self._db.commit()
 
+    # --- memory control (curate what it knows) ------------------------------
+    def remember(self, content: str, scope=None):
+        """Store a fact, reconciled (dedup/supersede/insert). Returns its id."""
+        self._reconcile(content, scope)
+        for r in self._scope_rows(scope):
+            if r["content"] == content:
+                return r["id"]
+        return None
+
+    def forget(self, query: str, scope=None, threshold: float = 0.6) -> int:
+        """Archive durable memories matching `query` (substring or high cosine).
+        Soft-delete — items stay in the table, just out of retrieval."""
+        emb = self._embed(query)
+        ql = (query or "").lower().strip()
+        n = 0
+        for r in self._retrieval_rows(scope):
+            content = r["content"] or ""
+            if (ql and ql in content.lower()) or \
+               _cosine(emb, json.loads(r["embedding"] or "[]")) >= threshold:
+                self.archive(r["id"])
+                n += 1
+        return n
+
+    def correct(self, old_query: str, new_content: str, scope=None) -> bool:
+        """Supersede the memory nearest to `old_query` with `new_content`."""
+        best, _ = self._nearest(self._embed(old_query), scope)
+        if best is not None:
+            self.supersede(best["id"], MemoryItem(content=new_content, kind=ItemKind.FACT, scope=scope))
+            return True
+        self.upsert(MemoryItem(content=new_content, kind=ItemKind.FACT, scope=scope))
+        return False
+
+    def provenance(self, query: str, scope=None, k: int = 5) -> list:
+        """The memories behind an answer, with when they were recorded."""
+        emb = self._embed(query)
+        ql = (query or "").lower().strip()
+        scored = sorted(((_cosine(emb, json.loads(r["embedding"] or "[]")), r)
+                         for r in self._retrieval_rows(scope)),
+                        key=lambda x: x[0], reverse=True)
+        out = []
+        for sim, r in scored[:max(k, 3)]:
+            content = r["content"] or ""
+            if sim <= 0.0 and (not ql or ql not in content.lower()):
+                continue
+            out.append({"content": content, "created_at": float(r["created_at"] or 0.0),
+                        "scope": r["scope"]})
+        return out[:k]
+
     # --- consolidation helpers ---------------------------------------------
     def decay(self, half_life_days: float = 30.0, cold_threshold: float = 0.15) -> int:
         """Archive items whose effective weight (importance x recency) falls

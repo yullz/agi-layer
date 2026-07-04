@@ -37,11 +37,8 @@ def build_mcp_server(store, orchestrator):
 
     @server.tool()
     def remember(fact: str, scope: str | None = None) -> str:
-        """Write a durable memory item."""
-        sess = Session(scope=scope)
-        sess.add_user(fact)
-        sess.add_assistant("")
-        store.write(Turn.from_session(sess))
+        """Write a durable memory item (reconciled + graph-linked)."""
+        store.remember(fact, scope=scope)
         return "remembered"
 
     return server

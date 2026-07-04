@@ -370,6 +370,42 @@ def main() -> int:
     _seed(smem2); _seed(smem2)
     check("re-seeding is idempotent (no duplicates)", smem2.semantic.count_current(None) == 7)
 
+    # 18) ingestion + memory control + proactive (Phase 10)
+    print("\n18) ingestion + memory control + proactive")
+    from core.proactive import Proactive
+    from memory.ingest import ingest_path
+    imem, _im1, _im2 = build_memory(os.path.join(tmp, "ing"))
+    doc = os.path.join(tmp, "notes.md")
+    with open(doc, "w", encoding="utf-8") as f:
+        f.write("WhaleTrack uses Postgres and Docker for deploys.\n"
+                "The Ocado dashboard is due Friday.\n")
+    rep = ingest_path(imem, doc, scope="work")
+    check("ingestion learned from a file", rep["files"] == 1 and rep["facts"] >= 1)
+    got = imem.retrieve("what does WhaleTrack use", scope="work", budget_tokens=1500)
+    check("ingested content is retrievable",
+          any("postgres" in c.content.lower() for c in got.items))
+
+    imem.remember("My cat is named Milo.", scope="work")
+    check("remember + provenance", any("Milo" in p["content"]
+          for p in imem.provenance("cat", scope="work")))
+    check("forget archives matching memory",
+          imem.forget("cat", scope="work") >= 1 and
+          not any("Milo" in p["content"] for p in imem.provenance("cat", scope="work")))
+
+    imem.remember("I live in Sofia.", scope="work")
+    imem.correct("where I live", "I live in Berlin now.", scope="work")
+    prov_live = imem.provenance("live", scope="work")
+    check("correct supersedes the old fact",
+          any("Berlin" in p["content"] for p in prov_live) and
+          not any("Sofia" in p["content"] for p in prov_live))
+
+    pro = Proactive(imem)
+    check("proactive detects profile gaps", len(pro.gaps(scope="work")) >= 1)
+    slot = pro.next_question(scope="work")
+    imem.remember(pro.fact_from_answer(slot, "Yulian"), scope="work")
+    check("active-learning answer is stored",
+          any("Yulian" in p["content"] for p in imem.provenance(slot["key"], scope="work")))
+
     print()
     if all(_results):
         print(f"All {len(_results)} checks {PASS}")

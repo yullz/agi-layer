@@ -1,0 +1,45 @@
+:root {
+  /* surfaces — layer void → carbon → slate for depth without hard lines */
+  --void: #05070A;      /* app canvas — cool near-black */
+  --carbon: #0C1116;    /* panels, rails, composer */
+  --slate: #141B22;     /* raised surface, cards, user bubbles */
+  --slate-2: #1A232C;   /* hover / elevated */
+  --line: rgba(255, 255, 255, .08);
+  --line-2: rgba(255, 255, 255, .14);
+
+  /* teal = safe / automatic */
+  --signal: #34E7D2;
+  --signal-deep: #0E7C71;
+  --signal-dim: rgba(52, 231, 210, .12);
+
+  /* amber = asks-first + confirm */
+  --amber: #F0A742;
+  --amber-glow: #FFCF7A;
+  --amber-dim: rgba(240, 167, 66, .13);
+
+  /* text */
+  --ink: #E8EEF2;
+  --ink-dim: #8A99A6;
+  --ink-faint: #4A5763;
+
+  /* status */
+  --ok: #34E7D2;
+  --warn: #F0A742;
+  --err: #F0616E;
+  --err-dim: rgba(240, 97, 110, .13);
+
+  --radius: 14px;
+
+  /* type */
+  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* motion */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* layout */
+  --rail-w: 60px;
+  --topbar-h: 52px;
+  --inspector-w: 288px;
+}

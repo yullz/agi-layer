@@ -62,9 +62,16 @@ export function Chat() {
     setMessages((m) => [...m, reply])
   }
 
-  function resolve(id: string, outcome: 'done' | 'cancelled', verb: string) {
-    setMessages((m) => m.map((msg) => (msg.id === id ? { ...msg, kind: outcome, resolved: outcome } : msg)))
-    if (outcome === 'done') toast(`${pastOf(verb)}.`, 'asks')
+  async function resolve(msg: Message, outcome: 'done' | 'cancelled') {
+    setMessages((m) => m.map((x) => (x.id === msg.id ? { ...x, kind: outcome, resolved: outcome } : x)))
+    if (outcome === 'cancelled') return
+    toast(`${pastOf(msg.confirm!.verb)}.`, 'asks')
+    if (msg.rerun) {                       // live: actually run it now (allow_actions)
+      setBusy(true)
+      const res = await api.confirmChat(msg.rerun)
+      setBusy(false)
+      if (res) setMessages((m) => [...m, res])
+    }
   }
 
   const empty = messages.length === 0
@@ -93,8 +100,8 @@ export function Chat() {
                   {m.kind === 'confirm' && m.confirm && (
                     <ConfirmCard
                       spec={m.confirm}
-                      onConfirm={() => resolve(m.id, 'done', m.confirm!.verb)}
-                      onCancel={() => resolve(m.id, 'cancelled', m.confirm!.verb)}
+                      onConfirm={() => resolve(m, 'done')}
+                      onCancel={() => resolve(m, 'cancelled')}
                       onEdit={() => taRef.current?.focus()}
                     />
                   )}

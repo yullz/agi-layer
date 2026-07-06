@@ -34,8 +34,8 @@ export function Memory() {
     setFacts((fs) => fs.map((x) => (x.id === id ? { ...x, strength: Math.min(1, x.strength + 0.18), decaying: false } : x)))
     api.reinforce(id); toast('Reinforced.')
   }
-  function forget(id: string) {
-    setFacts((fs) => fs.filter((x) => x.id !== id)); api.forget(id); toast('Forgotten.')
+  function forget(id: string, text: string) {
+    setFacts((fs) => fs.filter((x) => x.id !== id)); api.forget(id, text); toast('Forgotten.')
   }
   function saveEdit(id: string) {
     const text = editDraft.trim()
@@ -105,7 +105,7 @@ export function Memory() {
                         <div className="fact-actions">
                           <button className="btn ghost sm" onClick={() => reinforce(f.id)}>reinforce</button>
                           <button className="btn ghost sm" onClick={() => { setEditing(f.id); setEditDraft(f.text) }}><Pencil size={12} /> edit</button>
-                          <button className="btn ghost sm" onClick={() => forget(f.id)}><Trash2 size={12} /> forget</button>
+                          <button className="btn ghost sm" onClick={() => forget(f.id, f.text)}><Trash2 size={12} /> forget</button>
                         </div>
                       </div>
                     </div>

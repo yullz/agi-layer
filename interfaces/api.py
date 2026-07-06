@@ -17,6 +17,9 @@ from core.session import Session
 from interfaces.webapi import WebApp
 
 _STATIC = os.path.join(os.path.dirname(__file__), "static")
+# The premium "command deck" front-end (ui/), if it's been built. Served
+# same-origin so its /api calls have no CORS and it launches with this app.
+_UI_DIST = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ui", "dist")
 
 
 def build_app(orchestrator, store=None):
@@ -71,10 +74,8 @@ def build_app(orchestrator, store=None):
     class EffortIn(BaseModel):
         effort: str
 
-    # --- the app page ---
-    @app.get("/")
-    def index():
-        return FileResponse(os.path.join(_STATIC, "index.html"))
+    # (The front-end is served at the end — after the API routes — so /api/* and
+    # /turn win over the SPA's catch-all static mount.)
 
     # --- app API (browser <-> Myro) ---
     @app.post("/api/chat")
@@ -166,8 +167,18 @@ def build_app(orchestrator, store=None):
         store.consolidate()
         return {"status": "ok"}
 
-    if os.path.isdir(_STATIC):
-        app.mount("/static", StaticFiles(directory=_STATIC), name="static")
+    # --- front-end (mounted last so it never shadows /api/* or /turn) ---
+    if os.path.isfile(os.path.join(_UI_DIST, "index.html")):
+        # The built command deck. Its assets are relative, so serving the dir at
+        # "/" with html=True gives the SPA + its /assets on the same origin.
+        app.mount("/", StaticFiles(directory=_UI_DIST, html=True), name="deck")
+    else:
+        # Fall back to the bundled static SPA (no Node build needed).
+        @app.get("/")
+        def index():
+            return FileResponse(os.path.join(_STATIC, "index.html"))
+        if os.path.isdir(_STATIC):
+            app.mount("/static", StaticFiles(directory=_STATIC), name="static")
     return app
 
 

@@ -29,6 +29,25 @@ if errorlevel 1 (
     set AGI_INTERFACE=cli
 )
 
+rem The premium "command deck" UI ships pre-built in ui\dist, so it just works.
+rem If it's ever missing AND you have Node installed, rebuild it once here.
+if "%AGI_INTERFACE%"=="api" if not exist "ui\dist\index.html" (
+    where npm >nul 2>nul && (
+        echo Building the Myro deck UI once - this can take a minute...
+        pushd ui
+        call npm install
+        call npm run build
+        popd
+    )
+    if not exist "ui\dist\index.html" (
+        echo.
+        echo Note: showing the classic UI. To get the new command deck, install
+        echo Node.js from https://nodejs.org then run, inside this folder:
+        echo     cd ui  ^&^&  npm install  ^&^&  npm run build
+        echo.
+    )
+)
+
 echo Starting Myro... your browser will open in a moment.
 "%PY%" main.py
 echo.

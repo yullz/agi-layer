@@ -10,11 +10,20 @@ write-actions, and the audit log.
 
 ## Run
 
+The built deck ships **pre-built and committed** in `dist/`, so end users need
+**no Node install** — `Myro.bat` / `myro.sh` launch the Python backend, which
+serves `dist/` at `/`, and the new UI appears. Nothing else to do.
+
+To develop or rebuild the deck:
+
 ```bash
 npm install
-npm run dev        # http://localhost:5173
-npm run build      # static build in dist/ (servable from any local path)
+npm run dev        # http://localhost:5173 (hot reload, mock data)
+npm run build      # rebuild the committed dist/ — commit it to ship UI changes
 ```
+
+> Because `dist/` is what actually ships, **rebuild and commit it** whenever you
+> change the UI, or users will keep seeing the old build.
 
 No third-party network calls, fonts, or trackers — JetBrains Mono is bundled
 locally via `@fontsource`, so it loads and is fully interactive offline.
@@ -27,19 +36,27 @@ src/
   styles/global.css     one stylesheet, organized by component/view
   lib/types.ts          the domain contract the whole UI reads
   lib/mock.ts           realistic sample state
-  lib/api.ts            the ONE data seam — typed stubs over mock.ts
+  lib/api.ts            the ONE data seam — live backend with mock fallback
+  lib/live.ts           fetch client to Myro's localhost /api (interfaces/api.py)
   lib/state.tsx         app context: view, scope, toasts, ⌘K, confirm gate
   components/           Shell, ConfirmCard, TraceChip, GraphView, Palette, primitives…
   views/                Chat · Voice · Memory · Routines · Connectors · Settings
   App.tsx               client-side view routing (no reloads)
 ```
 
-## Wiring the real backend
+## The real backend (already wired)
 
-Everything reads through **`src/lib/api.ts`**. Each method today resolves from
-`mock.ts`; to go live, replace each body with a `fetch` to the localhost API
-(e.g. `http://127.0.0.1:8787`). The types in `types.ts` are the contract — keep
-them and the components don't change.
+Everything reads through **`src/lib/api.ts`**, a *live-with-fallback* seam.
+At boot `initApi()` probes the backend's `/api/status`; if it answers, each
+method calls **`src/lib/live.ts`** (real `fetch` to the localhost `/api`) and
+falls back to `mock.ts` on any error. So the deck shows **real data when the
+backend serves it, and stays fully clickable offline**. Endpoints the backend
+doesn't expose yet (graph, timeline, audit) stay on mock. The types in
+`types.ts` are the contract — components never change.
+
+Same-origin by default: the backend (`interfaces/api.py`) serves this `dist/`
+at `/` and the API under `/api/*`, so there's no CORS. Point at a separate dev
+origin with `VITE_API_BASE`.
 
 ## Views
 

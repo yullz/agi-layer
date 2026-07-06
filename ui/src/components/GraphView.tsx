@@ -86,7 +86,7 @@ export function GraphView({ graph, selected, onSelect }: {
             style={{ transition: 'opacity .25s var(--ease)', cursor: 'pointer' }}
             onClick={(e) => { e.stopPropagation(); onSelect(active ? null : n.id) }}
             tabIndex={0} role="button" aria-label={`${n.label} node`}
-            onKeyDown={(e) => { if (e.key === 'Enter') onSelect(active ? null : n.id) }}>
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(active ? null : n.id) } }}>
             {n.you && <circle r={54} fill="url(#youGlow)" />}
             <circle
               r={active ? r + 4 : r}

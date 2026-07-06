@@ -1,9 +1,10 @@
-import { Check, Pencil, X } from 'lucide-react'
+import { Calendar, Check, CircleDot, FilePen, HardDriveDownload, Mail, Pencil, Terminal, X } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { Tag } from './primitives'
-import type { ConfirmSpec } from '../lib/types'
+import type { ConfirmKind, ConfirmSpec } from '../lib/types'
 
-const ICON: Record<string, string> = {
-  calendar: '📅', shell: '⌘', file: '✎', email: '✉', issue: '⌥',
+const ICON: Record<ConfirmKind, LucideIcon> = {
+  calendar: Calendar, shell: Terminal, file: FilePen, email: Mail, issue: CircleDot, backup: HardDriveDownload,
 }
 
 /**
@@ -22,7 +23,7 @@ export function ConfirmCard({
   return (
     <div className="confirm" role="group" aria-label={`Confirm: ${spec.title}`}>
       <div className="confirm-head">
-        <span aria-hidden>{ICON[spec.kind] ?? '◆'}</span>
+        {(() => { const I = ICON[spec.kind] ?? CircleDot; return <span aria-hidden style={{ color: 'var(--amber)', display: 'inline-flex' }}><I size={16} /></span> })()}
         <Tag kind="asks" />
         <span className="ttl">{spec.title}</span>
       </div>

@@ -20,7 +20,8 @@
   /* text */
   --ink: #E8EEF2;
   --ink-dim: #8A99A6;
-  --ink-faint: #4A5763;
+  --ink-faint: #7C8A97;   /* AA on the dark surfaces (>=4.9:1) for small labels */
+  --ink-ghost: #4A5763;   /* decorative only — never small text */
 
   /* status */
   --ok: #34E7D2;

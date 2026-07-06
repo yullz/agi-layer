@@ -58,27 +58,27 @@ export const TOOLS_THIS_TURN = ['calendar', 'web', 'memory', 'files', 'git', 'no
 
 export const FACTS: Fact[] = [
   {
-    id: 'f1', text: 'Dentist is Dr. Ivanova', scope: SCOPES[2],
+    id: 'f1', text: 'Dentist is Dr. Ivanova', scope: SCOPES[2], node: 'ivanova',
     strength: 0.86, decaying: false, sourceTurn: 4,
   },
   {
-    id: 'f2', text: 'Prefers no morning appointments', scope: SCOPES[2],
+    id: 'f2', text: 'Prefers no morning appointments', scope: SCOPES[2], node: 'dentist',
     strength: 0.34, decaying: true, sourceTurn: 4,
   },
   {
-    id: 'f3', text: 'Chose the $9 pricing tier', scope: SCOPES[0],
+    id: 'f3', text: 'Chose the $9 pricing tier', scope: SCOPES[0], node: 'pricing',
     strength: 0.7, decaying: false, sourceTurn: 11, supersedes: '$12 tier · 2 days ago',
   },
   {
-    id: 'f4', text: 'Building whaletrack — a solo analytics tool', scope: SCOPES[0],
+    id: 'f4', text: 'Building whaletrack — a solo analytics tool', scope: SCOPES[0], node: 'whaletrack',
     strength: 0.92, decaying: false, sourceTurn: 2,
   },
   {
-    id: 'f5', text: 'Based in Sofia (Europe/Sofia)', scope: SCOPES[2],
+    id: 'f5', text: 'Based in Sofia (Europe/Sofia)', scope: SCOPES[2], node: 'sofia',
     strength: 0.8, decaying: false, sourceTurn: 3,
   },
   {
-    id: 'f6', text: 'Salary paid on the 25th', scope: SCOPES[1],
+    id: 'f6', text: 'Salary paid on the 25th', scope: SCOPES[1], node: 'you',
     strength: 0.6, decaying: false, sourceTurn: 19,
   },
 ]
@@ -115,20 +115,20 @@ export const TIMELINE: TimelineEntry[] = [
 
 export const ROUTINES: Routine[] = [
   {
-    id: 'rt1', glyph: '☀️', name: 'Morning brief', desc: 'Reads calendar, email, and web sources, then summarizes.',
+    id: 'rt1', glyph: 'sun', name: 'Morning brief', desc: 'Reads calendar, email, and web sources, then summarizes.',
     schedule: '08:00 daily', enabled: true, lastRun: 'ran 08:00 ✓', nextRun: 'tomorrow 08:00',
   },
   {
-    id: 'rt2', glyph: '🌙', name: 'Nightly backup', desc: 'Snapshots data/ to your private repo, encrypted.',
+    id: 'rt2', glyph: 'moon', name: 'Nightly backup', desc: 'Snapshots data/ to your private repo, encrypted.',
     schedule: '02:00 daily', enabled: true, lastRun: 'ran 02:00 ✓', nextRun: 'tonight 02:00',
     preauthorized: 'git push → private repo (encrypted)',
   },
   {
-    id: 'rt3', glyph: '📮', name: 'Link digest', desc: 'Collects links you saved and summarizes them at lunch.',
+    id: 'rt3', glyph: 'inbox', name: 'Link digest', desc: 'Collects links you saved and summarizes them at lunch.',
     schedule: '12:30 daily', enabled: false, lastRun: 'never', nextRun: 'paused',
   },
   {
-    id: 'rt4', glyph: '⚑', name: 'Weekly competitor scan', desc: 'Browses three competitor sites and notes what changed.',
+    id: 'rt4', glyph: 'flag', name: 'Weekly competitor scan', desc: 'Browses three competitor sites and notes what changed.',
     schedule: 'Mon 09:00', enabled: false,
     stopped: true, stoppedReason: 'a step needed a login it wasn’t authorized for — nothing ran',
   },

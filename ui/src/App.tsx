@@ -25,11 +25,11 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPaletteOpen(!paletteOpen) }
-      if (e.key === 'Escape') setPaletteOpen(false)
+      if (e.key === 'Escape') { setPaletteOpen(false); if (modalConfirm) resolveModal(false) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [paletteOpen, setPaletteOpen])
+  }, [paletteOpen, setPaletteOpen, modalConfirm, resolveModal])
 
   return (
     <>
@@ -40,7 +40,8 @@ export default function App() {
       <Toasts />
       {modalConfirm && (
         <div className="palette-overlay" onClick={() => resolveModal(false)}>
-          <div style={{ width: 'min(520px, 92vw)', marginTop: '4vh' }} onClick={(e) => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-label={modalConfirm.spec.title}
+            style={{ width: 'min(520px, 92vw)', marginTop: '4vh' }} onClick={(e) => e.stopPropagation()}>
             <ConfirmCard
               spec={modalConfirm.spec}
               onConfirm={() => resolveModal(true)}

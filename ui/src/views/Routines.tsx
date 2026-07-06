@@ -1,9 +1,12 @@
-import { Play, Plus, ShieldAlert } from 'lucide-react'
+import { Flag, Inbox, Moon, Play, Plus, ShieldAlert, Sun } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { useApp } from '../lib/state'
 import { Tag, Toggle } from '../components/primitives'
 import type { Routine } from '../lib/types'
+
+const GLYPH: Record<string, LucideIcon> = { sun: Sun, moon: Moon, inbox: Inbox, flag: Flag }
 
 export function Routines() {
   const { toast } = useApp()
@@ -36,7 +39,7 @@ export function Routines() {
             {routines.map((r) => (
               <div key={r.id} className={`card rt ${r.stopped ? 'stopped' : ''}`}>
                 <div className="rt-head">
-                  <span className="rt-glyph" aria-hidden>{r.glyph}</span>
+                  {(() => { const I = GLYPH[r.glyph] ?? Sun; return <span className="rt-glyph" aria-hidden style={{ color: r.stopped ? 'var(--err)' : 'var(--ink-dim)', display: 'inline-flex' }}><I size={18} /></span> })()}
                   <span className="rt-name">{r.name}</span>
                   <span className="rt-sched">{r.schedule}</span>
                   <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>

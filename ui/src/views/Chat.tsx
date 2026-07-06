@@ -1,5 +1,4 @@
-import { Send } from 'lucide-react'
-import { Mic } from 'lucide-react'
+import { Mic, Send } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { BACKENDS } from '../lib/mock'
@@ -10,6 +9,10 @@ import { Tag } from '../components/primitives'
 import type { Message, RetrievedMemory } from '../lib/types'
 
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+// An action keeps its name through the flow: Add → Added, Send → Sent, …
+const PAST: Record<string, string> = { Add: 'Added', Send: 'Sent', Run: 'Ran', Write: 'Wrote', Open: 'Opened' }
+const pastOf = (verb: string) => PAST[verb] ?? 'Done'
 
 function StreamText({ text }: { text: string }) {
   const [n, setN] = useState(reduced() ? text.length : 0)
@@ -61,7 +64,7 @@ export function Chat() {
 
   function resolve(id: string, outcome: 'done' | 'cancelled', verb: string) {
     setMessages((m) => m.map((msg) => (msg.id === id ? { ...msg, kind: outcome, resolved: outcome } : msg)))
-    if (outcome === 'done') toast(`${verb === 'Add' ? 'Added' : verb === 'Send' ? 'Sent' : verb === 'Run' ? 'Ran' : verb === 'Write' ? 'Wrote' : verb === 'Open' ? 'Opened' : 'Done'}.`, 'asks')
+    if (outcome === 'done') toast(`${pastOf(verb)}.`, 'asks')
   }
 
   const empty = messages.length === 0
@@ -96,7 +99,7 @@ export function Chat() {
                     />
                   )}
                   {m.kind === 'done' && m.confirm && (
-                    <div className="donechip">✓ {m.confirm.verb === 'Add' ? 'Added' : m.confirm.verb}ed — logged to audit</div>
+                    <div className="donechip">✓ {pastOf(m.confirm.verb)} — logged to audit</div>
                   )}
                   {m.kind === 'cancelled' && <div className="cancelchip">Cancelled — nothing done</div>}
                   {m.kind === 'text' && m.text && <div className="myro-prose"><StreamText text={m.text} /></div>}
@@ -115,7 +118,8 @@ export function Chat() {
             <div className="composer-box">
               <button className="icon-btn" title="Talk instead" onClick={() => setView('voice')} aria-label="Voice"><Mic size={19} /></button>
               <textarea
-                ref={taRef} value={draft} rows={1} placeholder="ask me anything — or tell me to do something"
+                ref={taRef} value={draft} rows={1} aria-label="Message Myro"
+                placeholder="ask me anything — or tell me to do something"
                 onChange={(e) => { setDraft(e.target.value); grow() }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
               />

@@ -20,7 +20,14 @@ function Panel({ title, sub, children }: { title: string; sub?: string; children
 }
 
 export function Settings() {
-  const { toast } = useApp()
+  const { toast, requestConfirm } = useApp()
+  async function backUp() {
+    const ok = await requestConfirm({
+      kind: 'backup', verb: 'Back up', title: 'Back up everything now',
+      lines: [{ k: 'to', v: 'private GitHub repo' }, { k: 'encrypted', v: 'yes' }, { v: 'git push → off your machine' }],
+    })
+    if (ok) toast('Backed up.', 'asks')
+  }
   const [audit, setAudit] = useState<AuditRow[]>([])
   const [notify, setNotify] = useState<NotifyChannel[]>([])
   const [nightly, setNightly] = useState(true)
@@ -58,7 +65,7 @@ export function Settings() {
               <div className="row-between"><span>Nightly backup</span><Toggle on={nightly} onChange={setNightly} label="Nightly backup" /></div>
               <div className="row-between"><span>Destination</span><span className="kbd">private GitHub repo ▾</span></div>
               <div className="row-between"><span>Encrypt before it leaves the machine</span><Toggle on={encrypt} onChange={setEncrypt} label="Encrypt" /></div>
-              <button className="btn teal" style={{ alignSelf: 'flex-start' }} onClick={() => toast('Backed up.')}><Save size={14} /> Back up now</button>
+              <button className="btn amber" style={{ alignSelf: 'flex-start' }} onClick={backUp}><Save size={14} /> Back up now</button>
             </Panel>
 
             <Panel title="Notifications to your phone" sub="So a scheduled briefing lands in your pocket.">

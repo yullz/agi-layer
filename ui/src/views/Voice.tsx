@@ -39,11 +39,15 @@ export function Voice() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button
-            className={`btn ${mode === 'listening' ? 'amber' : 'teal'}`}
+            className="btn teal"
             onMouseDown={() => setMode('listening')} onMouseUp={() => setMode('thinking')}
             onClick={() => setMode((m) => (m === 'listening' ? 'idle' : 'listening'))}>
-            <span style={{ width: 8, height: 8, borderRadius: 999, background: mode === 'listening' ? '#E0483F' : 'currentColor', display: 'inline-block' }} />
-            push to talk
+            <span style={{
+              width: 8, height: 8, borderRadius: 999, display: 'inline-block',
+              background: mode === 'listening' ? 'var(--err)' : 'currentColor',
+              boxShadow: mode === 'listening' ? '0 0 8px var(--err)' : 'none',
+            }} />
+            {mode === 'listening' ? 'listening…' : 'push to talk'}
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span className="view-sub">hands-free</span>

@@ -1,5 +1,6 @@
-import { Lock, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { Lock, Pencil, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { api } from '../lib/api'
 import { useApp } from '../lib/state'
 import { GraphView } from '../components/GraphView'
@@ -16,6 +17,8 @@ export function Memory() {
   const [graph, setGraph] = useState<Graph>({ nodes: [], edges: [] })
   const [timeline, setTimeline] = useState<TimelineEntry[]>([])
   const [sel, setSel] = useState<string | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState('')
 
   useEffect(() => {
     api.facts().then(setFacts)
@@ -24,6 +27,27 @@ export function Memory() {
   }, [])
 
   const shownFacts = facts.filter((f) => f.text.toLowerCase().includes(q.toLowerCase()))
+  const shownTimeline = timeline.filter((e) =>
+    `${e.summary} ${e.ts} turn ${e.turn}`.toLowerCase().includes(q.toLowerCase()))
+
+  function reinforce(id: string) {
+    setFacts((fs) => fs.map((x) => (x.id === id ? { ...x, strength: Math.min(1, x.strength + 0.18), decaying: false } : x)))
+    api.reinforce(id); toast('Reinforced.')
+  }
+  function forget(id: string) {
+    setFacts((fs) => fs.filter((x) => x.id !== id)); api.forget(id); toast('Forgotten.')
+  }
+  function saveEdit(id: string) {
+    const text = editDraft.trim()
+    if (text) setFacts((fs) => fs.map((x) => (x.id === id ? { ...x, text } : x)))
+    setEditing(null); if (text) toast('Updated.')
+  }
+  const TABS: Tab[] = ['facts', 'graph', 'timeline']
+  function onTabKey(e: ReactKeyboardEvent, t: Tab) {
+    const i = TABS.indexOf(t)
+    if (e.key === 'ArrowRight') { e.preventDefault(); setTab(TABS[(i + 1) % 3]) }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); setTab(TABS[(i + 2) % 3]) }
+  }
   const selNode = graph.nodes.find((n) => n.id === sel)
   const selNeighbors = useMemo(() => {
     if (!sel) return []
@@ -49,21 +73,29 @@ export function Memory() {
               global &amp; identity facts always available, whatever scope you’re in
             </div>
 
-            <div className="tabs" role="tablist">
-              {(['facts', 'graph', 'timeline'] as Tab[]).map((t) => (
-                <button key={t} role="tab" aria-selected={tab === t} className={`tab ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)}>
+            <div className="tabs" role="tablist" aria-label="Memory views">
+              {TABS.map((t) => (
+                <button key={t} role="tab" id={`tab-${t}`} aria-controls={`panel-${t}`} aria-selected={tab === t}
+                  tabIndex={tab === t ? 0 : -1} className={`tab ${tab === t ? 'on' : ''}`}
+                  onClick={() => setTab(t)} onKeyDown={(e) => onTabKey(e, t)}>
                   {t[0].toUpperCase() + t.slice(1)}
                 </button>
               ))}
             </div>
 
             {tab === 'facts' && (
-              <div className="stack">
+              <div className="stack" role="tabpanel" id="panel-facts" aria-labelledby="tab-facts">
                 {shownFacts.map((f) => (
                   <div key={f.id} className="fact">
                     <span className="fmark">◈</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="ftext">{f.text}</div>
+                      {editing === f.id ? (
+                        <input className="fact-edit mono" value={editDraft} autoFocus aria-label="Edit fact"
+                          onChange={(e) => setEditDraft(e.target.value)} onBlur={() => saveEdit(f.id)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(f.id); if (e.key === 'Escape') setEditing(null) }} />
+                      ) : (
+                        <div className="ftext">{f.text}</div>
+                      )}
                       {f.supersedes && <div className="fsuper"><RefreshCw size={12} /> supersedes “{f.supersedes}”</div>}
                       <div className="fact-meta">
                         <ScopeTag scope={f.scope} />
@@ -71,8 +103,9 @@ export function Memory() {
                         <Meter strength={f.strength} decaying={f.decaying} />
                         <span className="mono" style={{ fontSize: 11, color: 'var(--ink-faint)' }}>from turn #{f.sourceTurn}</span>
                         <div className="fact-actions">
-                          <button className="btn ghost sm" onClick={() => toast('Reinforced.')}>reinforce</button>
-                          <button className="btn ghost sm" onClick={() => toast('Forgotten.')}><Trash2 size={12} /> forget</button>
+                          <button className="btn ghost sm" onClick={() => reinforce(f.id)}>reinforce</button>
+                          <button className="btn ghost sm" onClick={() => { setEditing(f.id); setEditDraft(f.text) }}><Pencil size={12} /> edit</button>
+                          <button className="btn ghost sm" onClick={() => forget(f.id)}><Trash2 size={12} /> forget</button>
                         </div>
                       </div>
                     </div>
@@ -88,7 +121,7 @@ export function Memory() {
             )}
 
             {tab === 'graph' && (
-              <div className="graph-wrap hud">
+              <div className="graph-wrap hud" role="tabpanel" id="panel-graph" aria-labelledby="tab-graph">
                 <GraphView graph={graph} selected={sel} onSelect={setSel} />
                 <div className="graph-legend">
                   <span>click a node → its facts &amp; relations</span>
@@ -98,8 +131,8 @@ export function Memory() {
             )}
 
             {tab === 'timeline' && (
-              <div>
-                {timeline.map((e) => (
+              <div role="tabpanel" id="panel-timeline" aria-labelledby="tab-timeline">
+                {shownTimeline.map((e) => (
                   <div key={e.id} className="tl-row">
                     <span className="tl-ts">{e.ts}</span>
                     <div>
@@ -108,6 +141,7 @@ export function Memory() {
                     </div>
                   </div>
                 ))}
+                {shownTimeline.length === 0 && <div className="empty">Nothing in the timeline matches “{q}”.</div>}
               </div>
             )}
           </div>
@@ -124,9 +158,12 @@ export function Memory() {
             </div>
             <div className="insp-group">
               <div className="label teal">related facts</div>
-              {facts.filter((f) => f.text.toLowerCase().includes(selNode.label.toLowerCase().split(' ')[0])).map((f) => (
+              {facts.filter((f) => f.node === selNode.id).map((f) => (
                 <div key={f.id} className="insp-card"><div className="txt">◈ {f.text}</div></div>
               ))}
+              {facts.filter((f) => f.node === selNode.id).length === 0 && (
+                <div className="insp-card"><div className="txt" style={{ color: 'var(--ink-dim)' }}>No stored facts about this node yet.</div></div>
+              )}
             </div>
             <div className="insp-group">
               <div className="label teal">relations</div>

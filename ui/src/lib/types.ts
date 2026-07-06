@@ -20,7 +20,7 @@ export interface Trace {
   detail: string
 }
 
-export type ConfirmKind = 'calendar' | 'shell' | 'file' | 'email' | 'issue'
+export type ConfirmKind = 'calendar' | 'shell' | 'file' | 'email' | 'issue' | 'backup'
 export interface ConfirmSpec {
   kind: ConfirmKind
   verb: string          // the action's name, kept through the flow: "Add", "Send", "Run"
@@ -51,6 +51,7 @@ export interface Fact {
   decaying: boolean
   sourceTurn: number
   supersedes?: string
+  node?: string         // graph node id this fact is about (for the graph inspector)
 }
 
 export interface GraphNode { id: string; label: string; kind: string; x: number; y: number; you?: boolean }

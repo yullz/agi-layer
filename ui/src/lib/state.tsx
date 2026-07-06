@@ -14,8 +14,6 @@ interface AppState {
   scopes: Scope[]
   paletteOpen: boolean
   setPaletteOpen: (b: boolean) => void
-  inspectorOpen: boolean
-  setInspectorOpen: (b: boolean) => void
   toasts: Toast[]
   toast: (text: string, gate?: Gate) => void
   modalConfirm: ModalConfirm | null
@@ -29,7 +27,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<ViewId>('chat')
   const [scope, setScope] = useState<Scope>(SCOPES[0])
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [inspectorOpen, setInspectorOpen] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
   const [modalConfirm, setModalConfirm] = useState<ModalConfirm | null>(null)
   const tid = useRef(0)
@@ -45,15 +42,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       new Promise<boolean>((resolve) => setModalConfirm({ spec, resolve })),
     [],
   )
+  // Resolve the pending promise OUTSIDE the state updater (updaters must be pure
+  // — StrictMode double-invokes them in dev).
   const resolveModal = useCallback((ok: boolean) => {
-    setModalConfirm((m) => { m?.resolve(ok); return null })
-  }, [])
+    modalConfirm?.resolve(ok)
+    setModalConfirm(null)
+  }, [modalConfirm])
 
   const value = useMemo<AppState>(() => ({
     view, setView, scope, setScope, scopes: SCOPES,
-    paletteOpen, setPaletteOpen, inspectorOpen, setInspectorOpen,
+    paletteOpen, setPaletteOpen,
     toasts, toast, modalConfirm, requestConfirm, resolveModal,
-  }), [view, scope, paletteOpen, inspectorOpen, toasts, toast, modalConfirm, requestConfirm, resolveModal])
+  }), [view, scope, paletteOpen, toasts, toast, modalConfirm, requestConfirm, resolveModal])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

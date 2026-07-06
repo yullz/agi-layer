@@ -29,20 +29,20 @@ function ScopeMenu() {
   }, [open])
   return (
     <div style={{ position: 'relative' }}>
-      <button className="scope-sel" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }} aria-haspopup="listbox" aria-expanded={open}>
+      <button className="scope-sel" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }} aria-haspopup="menu" aria-expanded={open}>
         <span className="label" style={{ color: 'var(--ink-faint)' }}>scope</span>
         <span className="mono" style={{ fontSize: 13, color: 'var(--ink)' }}>{scope.name}</span>
         {scope.sensitive && <Lock size={12} className="lock" />}
         <ChevronDown size={14} style={{ color: 'var(--ink-faint)' }} />
       </button>
       {open && (
-        <div role="listbox" style={{
+        <div role="menu" aria-label="Scope" style={{
           position: 'absolute', top: 40, left: 0, minWidth: 210, zIndex: 70,
           background: 'var(--carbon)', border: '1px solid var(--line-2)', borderRadius: 12,
           padding: 6, boxShadow: '0 24px 60px -20px rgba(0,0,0,.8)',
         }}>
           {scopes.map((s) => (
-            <button key={s.id} className="palette-item" onClick={() => { setScope(s); setOpen(false) }}>
+            <button key={s.id} role="menuitem" aria-current={s.id === scope.id} className="palette-item" onClick={() => { setScope(s); setOpen(false) }}>
               <span className="pk mono" style={{ fontSize: 13 }}>{s.kind === 'project' ? `project:${s.name}` : s.name}</span>
               {s.sensitive && <span className="pd" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Lock size={11} style={{ color: 'var(--amber)' }} /> local-only</span>}
             </button>

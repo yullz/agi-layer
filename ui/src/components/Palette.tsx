@@ -19,7 +19,7 @@ export function Palette() {
     { key: ':voice', desc: 'hands-free', run: go('voice') },
     { key: ':settings', desc: 'brain · backups · audit', run: go('settings') },
     { key: ':do <task>', desc: 'act, don’t just answer', run: () => { setView('chat'); setPaletteOpen(false) } },
-    { key: ':backup', desc: 'snapshot everything now', run: () => { setPaletteOpen(false); toast('Backed up.') } },
+    { key: ':backup', desc: 'snapshot everything now', run: () => { setPaletteOpen(false); toast('Backed up.', 'asks') } },
     { key: ':starters', desc: 'install the ready-made routines', run: () => { setView('routines'); setPaletteOpen(false) } },
     { key: ':search memory', desc: 'fused recall', run: go('memory') },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -36,6 +36,8 @@ export function Palette() {
       <div className="palette" role="dialog" aria-label="Command palette" onClick={(e) => e.stopPropagation()}>
         <input
           className="palette-input mono" autoFocus placeholder="run a command, jump somewhere, search memory…"
+          aria-label="Command palette" role="combobox" aria-expanded aria-controls="palette-list"
+          aria-activedescendant={filtered[sel] ? `palette-opt-${sel}` : undefined}
           value={q} onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Escape') setPaletteOpen(false)
@@ -44,9 +46,10 @@ export function Palette() {
             else if (e.key === 'Enter') filtered[sel]?.run()
           }}
         />
-        <div className="palette-list">
+        <div className="palette-list" id="palette-list" role="listbox" aria-label="Commands">
           {filtered.map((c, i) => (
-            <button key={c.key} className={`palette-item ${i === sel ? 'sel' : ''}`}
+            <button key={c.key} id={`palette-opt-${i}`} role="option" aria-selected={i === sel}
+              className={`palette-item ${i === sel ? 'sel' : ''}`}
               onMouseEnter={() => setSel(i)} onClick={c.run}>
               <span className="pk">{c.key}</span>
               <span className="pd">{c.desc}</span>

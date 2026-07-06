@@ -1,5 +1,6 @@
 node_modules/
-dist/
+# dist/ is intentionally committed — it ships the built deck so Myro.bat can
+# serve the new UI with no Node/npm install. Rebuild with `npm run build`.
 *.log
 shots.mjs
 live-shots.mjs

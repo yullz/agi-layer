@@ -19,7 +19,8 @@ venv/
 .mypy_cache/
 .ruff_cache/
 build/
-dist/
+# Python packaging output — repo root only, so ui/dist stays shipped
+/dist/
 *.egg
 .coverage
 htmlcov/

@@ -39,6 +39,7 @@ export interface Message {
   traces?: Trace[]
   confirm?: ConfirmSpec
   resolved?: 'done' | 'cancelled'
+  rerun?: string   // live mode: original text to re-send (allow_actions) on Confirm
 }
 
 export interface RetrievedMemory { id: string; text: string; retriever: Retriever }

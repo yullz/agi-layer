@@ -57,7 +57,7 @@ export function Routines() {
                     <span>● last: {r.lastRun}</span>
                     <span>next: {r.nextRun}</span>
                     <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                      <button className="btn ghost sm" onClick={() => toast('Ran.')}><Play size={12} /> Run now</button>
+                      <button className="btn ghost sm" onClick={async () => { await api.runRoutine(r.name); toast('Ran.') }}><Play size={12} /> Run now</button>
                       <button className="btn ghost sm">Edit</button>
                     </div>
                   </div>
